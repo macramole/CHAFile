@@ -49,3 +49,7 @@ Each line is an object with:
 * LINE_BULLET : Timestamp
 * TIER_MOR : A list of objects with MOR data: MOR_UNIT_LEXEMA and MOR_UNIT_CATEGORIA
 * ... any other tier you selected when instanced
+
+### Cite
+
+Garber, L. (2019). CHA file python parser. Zenodo. https://doi.org/10.5281/zenodo.3364020
