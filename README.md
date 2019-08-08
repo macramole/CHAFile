@@ -13,7 +13,7 @@ Made by Leandro Garber from [CIIPME-CONICET](http://www.ciipme-conicet.gov.ar/wo
 * MOR tier as objects
 * Easily add more custom tiers 
 * Count nouns
-* Count verbs (spanish only)
+* Count main verbs, either referring to physical or mental actions. Auxiliary verbs present in periphrastic verbs are excluded. (spanish only)
 
 ## Usage
 
