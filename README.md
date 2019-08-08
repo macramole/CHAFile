@@ -1,6 +1,12 @@
+
+[![DOI](https://zenodo.org/badge/201303243.svg)](https://zenodo.org/badge/latestdoi/201303243)
+
+
 # CHA file parser for Python
 
 Class for parsing [CLAN's](http://dali.talkbank.org/clan/) CHA file.
+
+Made by Leandro Garber from [CIIPME-CONICET](http://www.ciipme-conicet.gov.ar/wordpress/)
 
 ## Features
 * Utterances as a list of strings
