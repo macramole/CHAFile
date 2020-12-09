@@ -275,8 +275,8 @@ class ChaFile:
         return self.language
     
     def processLines(self):
-        INDEX_CONTENIDO = 12
-        INDEX_LINENUMBER = 11
+        INDEX_CONTENIDO = 13
+        INDEX_LINENUMBER = 12
         INDEX_SPEAKER = 3
 
         strTiers = " "
@@ -290,6 +290,7 @@ class ChaFile:
         # entonces hago la segunda (que no creo que ande en Windows)
 #        exitcode, output = getstatusoutput(  os.path.join(CLAN_BIN_PATH, "kwal") + " +d4 -f " + strTiers + " \"" + self.chaFilePath + "\" " )
         command = "cat \"%s\" | %s +d4 -f %s" % (self.chaFilePath, os.path.join(CLAN_BIN_PATH, "kwal"), strTiers)
+#        print(command)
         exitcode, output = getstatusoutput( command )
 
         if exitcode != 0:
