@@ -28,7 +28,6 @@ MOR_REPLACEMENTS = { #reemplazo de palabras que está agarrando mal el MOR, ej: 
 LINE_UTTERANCE = "emisión"
 LINE_NUMBER = "número"
 LINE_SPEAKER = "hablante"
-LINE_TOCHILD = "dirigidaAlNiño" #DEPRECATED in favor of LINE_ADDRESSEE
 LINE_ADDRESSEE = "destinatario"
 LINE_BULLET = "bullet"
 LINE_NOUNS = "sustantivos"
@@ -746,7 +745,7 @@ class ChaFile:
 	def fixDAD(self):
 		for l in self.getLines():
 			if l[TIER_ACTIVITY] == MISSING_VALUE:
-				if l[LINE_TOCHILD]:
+				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
 					log.log("Warning. Empty activity in +CHI line (%d)" % l[LINE_NUMBER])
 				continue
 			maxDAD = l[TIER_ACTIVITY][0]
