@@ -5,23 +5,6 @@ Created on Mon Oct 29 14:59:04 2018
 
 @author: Leandro Garber
 
-
-Tema CHAs importados desde ELAN de archivos de ACLEW
-
-No hay +CHI ni +OCH sino que hay
-
-En la misma línea [%%xds:] que puede ser:
-	[%%xds:C]
-	[%%xds:T]
-	[%%xds:O]
-	[%%xds:U]
-
-En la mayoría de los casos el +CHI es [%%xds:C]. Excepto en ROS y CAS que es
-[%%xds:T]
-
-ESTO CAMBIÓ
-Ahora se usa T en todos los casos pero xds se exporta como tier
-
 """
 
 import os
@@ -89,6 +72,7 @@ ADDRESSEE_XDS_OTHER = "O"
 ADDRESSEE_XDS_UNKNOWN = "U"
 ADDRESSEE_XDS_ADULT = "A"
 ADDRESSEE_XDS_TARGET_CHILD = "T"
+ADDRESSEE_XDS_PET = "P"
 ADDRESSEE_XDS_BOTH = "B"
 #BOTH ?
 
@@ -96,6 +80,7 @@ SPEAKER_SILENCE = "*SIL"
 SPEAKER_TARGET_CHILD = "CHI"
 SPEAKER_OTHER_CHILD = "OCH"
 SPEAKER_ADULT = "ADULT"
+SPEAKER_PET = "P"
 SPEAKER_OTHER = "OTHER"
 SPEAKER_UNKNOWN = "UNKNOWN"
 SPEAKER_BOTH = "BOTH" #ADULT + TARGET
@@ -106,7 +91,8 @@ ADDRESSEE_CORRESPOND = {
 	ADDRESSEE_XDS_UNKNOWN : SPEAKER_UNKNOWN,
 	ADDRESSEE_XDS_ADULT : SPEAKER_ADULT,
 	ADDRESSEE_XDS_TARGET_CHILD : SPEAKER_TARGET_CHILD,
-	ADDRESSEE_XDS_BOTH : SPEAKER_BOTH
+	ADDRESSEE_XDS_BOTH : SPEAKER_BOTH,
+	ADDRESSEE_XDS_PET : SPEAKER_PET
 }
 
 CATEGORIAS_VERBOS = ["v","ger","part","aux","imp","inf","cop"] #habia sacado "cop" en variation sets y saque "co" porque toma cualquier cosa
@@ -348,7 +334,7 @@ class ChaFile:
 
 			self._setAddressee(line)
 
-			if not (self.CDS_ONLY and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH]):
+			if not (self.CDS_ONLY and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH	]):
 				self.lines.append(line)
 
 	def _setAddressee(self, line):
