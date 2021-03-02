@@ -18,7 +18,12 @@ ERROR_NO_MOR_FOUND = 1
 MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
 MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
-MOR_STOP_WORDS = ["imp|da-2S&IMP~pro:clit|3S", "imp|da-2S&IMP~pro:clit|3S=give"] #este es el dale
+MOR_STOP_WORDS = [ "imp|da-2S&IMP~pro:clit|3S", #dale
+				   "imp|da-2S&IMP~pro:clit|3S=give", #dale
+
+				   "adj|okay^co|okay",
+				   #"v|like^conj|like^prep|like^co|like",
+				   "adv|right^adj|right^co|right^n|right"]
 MOR_REPLACEMENTS = { #reemplazo de palabras que está agarrando mal el MOR, ej: n|papi debería ser n|papá
 	"papi" : "papá",
 	"mami" : "mamá",
