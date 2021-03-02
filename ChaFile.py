@@ -182,11 +182,15 @@ class ChaFile:
 
 		return dads
 
-	def __init__(self, chaFilePath, SPEAKER_IGNORE = [ SPEAKER_SILENCE ], USE_TIERS = [ TIER_MOR ], CDS_ONLY = False):
+	def __init__(self, chaFilePath,
+				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ], USE_TIERS = [ TIER_MOR ],
+				 CDS_ONLY = False, VERBOSE = False):
+
 		self.chaFilePath = chaFilePath
 		self.SPEAKER_IGNORE = SPEAKER_IGNORE
 		self.USE_TIERS = USE_TIERS
 		self.CDS_ONLY = CDS_ONLY
+		self.VERBOSE = VERBOSE
 
 		self.filename = os.path.basename(chaFilePath)
 		self.filename = self.filename[0:self.filename.rfind(".")]
@@ -266,7 +270,9 @@ class ChaFile:
 		# entonces hago la segunda (que no creo que ande en Windows)
 		# exitcode, output = getstatusoutput(  os.path.join(CLAN_BIN_PATH, "kwal") + " +d4 -f " + strTiers + " \"" + self.chaFilePath + "\" " )
 		command = "cat \"%s\" | %s +d4 -f %s" % (self.chaFilePath, os.path.join(CLAN_BIN_PATH, "kwal"), strTiers)
-		# print(command)
+		if self.VERBOSE:
+			log.log(command)
+
 		exitcode, output = getstatusoutput( command )
 
 		if exitcode != 0:
