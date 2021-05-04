@@ -764,4 +764,4 @@ class ChaFile:
 				if TIER_ACTIVITY_SCORES[dad] > TIER_ACTIVITY_SCORES[maxDAD]:
 					maxDAD = dad
 
-		l[TIER_ACTIVITY] = maxDAD
+			l[TIER_ACTIVITY] = maxDAD
