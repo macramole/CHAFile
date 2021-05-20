@@ -87,7 +87,7 @@ SPEAKER_ADULT = "ADULT"
 SPEAKER_PET = "P"
 SPEAKER_OTHER = "OTHER"
 SPEAKER_UNKNOWN = "UNKNOWN"
-SPEAKER_BOTH = "BOTH" #ADULT + TARGET
+SPEAKER_BOTH = "BOTH" #ADULT + (TARGET || CHILD) This is a problem so we are discarding it
 
 ADDRESSEE_CORRESPOND = {
 	ADDRESSEE_XDS_CHILD : SPEAKER_OTHER_CHILD,
@@ -427,8 +427,22 @@ class ChaFile:
 
 	def countNouns(self):
 		for l in self.getLines():
-			self._countNounsLine(l)
-	def _countNounsLine(self, linea):
+			self.countNounsInLine(l)
+	def countNounsByAddressee(self):
+		addressees = {}
+
+		for l in self.getLines():
+			c = self.countNounsInLine(l)
+
+			addressee = l[LINE_ADDRESSEE]
+			if addressee in addressees:
+				addressees[addressee] += c
+			else:
+				addressees[addressee] = c
+
+		return addressees
+	def countNounsInLine(self, linea):
+		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		sustantivos = {}
 
 		def sumarSustantivos(sust):
@@ -437,11 +451,15 @@ class ChaFile:
 			else:
 				sustantivos[sust] = 1
 
-		for morUnit in linea[TIER_MOR]:
-			if morUnit[MOR_UNIT_CATEGORIA] == "n":
-				sumarSustantivos( morUnit[MOR_UNIT_LEXEMA] )
+		c = 0
+		if linea[TIER_MOR] != MISSING_VALUE: 	
+			for morUnit in linea[TIER_MOR]:
+				if morUnit[MOR_UNIT_CATEGORIA] == "n":
+					c += 1 
+					sumarSustantivos( morUnit[MOR_UNIT_LEXEMA] )
 
 		linea[LINE_NOUNS] = sustantivos
+		return c
 
 	def getVerbs(self, soloIndices = True, CONTAR_COPULA_Y_AUXILIAR = False):
 		for l in self.getLines():
@@ -569,12 +587,25 @@ class ChaFile:
 			morIndexes = self._checkCriteria( list(lineaMor.values()), [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
 
 		linea[LINE_VERBS] = verbos
+	def countVerbsByAddressee(self):
+		addressees = {}
 
+		for l in self.getLines():
+			c = self.countVerbsInLine(l)
+
+			addressee = l[LINE_ADDRESSEE]
+			if addressee in addressees:
+				addressees[addressee] += c
+			else:
+				addressees[addressee] = c
+
+		return addressees
 	def countVerbs(self, CONTAR_COPULA_Y_AUXILIAR = False):
 		for l in self.getLines():
-			self._countVerbsInLine(l, CONTAR_COPULA_Y_AUXILIAR)
+			self.countVerbsInLine(l, CONTAR_COPULA_Y_AUXILIAR)
 
-	def _countVerbsInLine(self, linea, CONTAR_COPULA_Y_AUXILIAR = False):
+	def countVerbsInLine(self, linea, CONTAR_COPULA_Y_AUXILIAR = False):
+		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		import copy
 
 		verbos = {}
@@ -676,6 +707,11 @@ class ChaFile:
 			morIndexes = self._checkCriteria( line["mor"], [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
 
 		linea[LINE_VERBS] = verbos
+
+		c=0
+		for v in verbos:
+			c+= verbos[v]
+		return c
 
 	# busca lineas cuyo mor cumplan cierto criterio
 	#
