@@ -16,14 +16,15 @@ from log import Log
 ERROR_NO_MOR_FOUND = 1
 
 MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
+MOR_REGEX = "([A-zÀ-ú:]*)\|([A-zÀ-ú]*)(.*)"
 MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
-MOR_STOP_WORDS = [ "imp|da-2S&IMP~pro:clit|3S", #dale
-				   "imp|da-2S&IMP~pro:clit|3S=give", #dale
-
-				   "adj|okay^co|okay",
-				   #"v|like^conj|like^prep|like^co|like",
-				   "adv|right^adj|right^co|right^n|right"]
+MOR_UNIT_EXTRA = "extra"
+MOR_STOP_WORDS = [  ["imp", "da", "-2S&IMP~pro:clit|3S"], #lexema o [categoria, lexema] o [categoria, lexema, extra]
+					"okay",
+					# "like",
+					"right"
+]
 MOR_REPLACEMENTS = { #reemplazo de palabras que está agarrando mal el MOR, ej: n|papi debería ser n|papá
 	"papi" : "papá",
 	"mami" : "mamá",
@@ -136,42 +137,36 @@ class ChaFile:
 		if morUnit in MOR_STOP_WORDS:
 			return {}
 		
-		sepIndex = morUnit.find("|")
-		if sepIndex > -1:
-			morCategoriaPalabra = morUnit[:sepIndex]
+		matches = re.match(MOR_REGEX, morUnit)
+		if matches != None: #no agarra ni . ! ? 
+			if len(matches.groups()) == 3:
+				morCategoria = matches.group(1)
+				morLexema = matches.group(2)
+				morExtra = matches.group(3)
 
-			endIndex = morUnit.find("=")
+				for stopWord in MOR_STOP_WORDS:
+					if type(stopWord) is list:
+						if morLexema == stopWord[1] and morCategoria == stopWord[0]:
+							if len(stopWord) == 2:
+								return {}
+							else:
+								if stopWord[2] in morExtra:
+									return {}
+					else:
+						if morLexema == stopWord:
+							return {}
 
-			# caso especial para verbos (n) porque está tomando mal los
-			# diminutivos, para que agarre bien la descripción
-			if morCategoriaPalabra == "n":
-				endIndex = morUnit.find("&")
-				if endIndex == -1:
-					endIndex = morUnit.find("-")
+				#reemplazo de palabras que está agarrando mal el MOR
+				if morLexema in MOR_REPLACEMENTS:
+					morLexema = MOR_REPLACEMENTS[morLexema]
 
-					if endIndex == -1:
-						endIndex = morUnit.find("=")
+				parsedMorUnit = {
+					MOR_UNIT_CATEGORIA : morCategoria,
+					MOR_UNIT_LEXEMA : morLexema,
+					MOR_UNIT_EXTRA : morExtra
+				}
 
-			morLexema = morUnit[sepIndex+1:endIndex]
-			if endIndex == -1:
-				morLexema = morUnit[sepIndex+1:].strip()
-
-			#en verbos también me quedo con la descripción hasta -
-			#co es un caso especial
-			if morCategoriaPalabra in CATEGORIAS_VERBOS and morCategoriaPalabra != "co" :
-				sepDescripcionIndex = morLexema.find("-")
-				morLexema = morLexema[:sepDescripcionIndex]
-
-			#reemplazo de palabras que está agarrando mal el MOR, ej: n|papi debería ser n|papá
-			if morLexema in MOR_REPLACEMENTS:
-				morLexema = MOR_REPLACEMENTS[morLexema]
-
-			parsedMorUnit = {
-				MOR_UNIT_CATEGORIA : morCategoriaPalabra,
-				MOR_UNIT_LEXEMA : morLexema
-			}
-
-			return parsedMorUnit
+				return parsedMorUnit
 		else:
 			return {}
 
