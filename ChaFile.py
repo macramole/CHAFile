@@ -105,6 +105,9 @@ MISSING_VALUE = "?"
 
 CLAN_BIN_PATH = os.path.join( os.path.dirname(__file__), "./clanBin/" )
 
+LANGUAGE_SPANISH = "spa"
+LANGUAGE_ENGLISH = "eng"
+
 log = Log()
 
 class ChaFile:
@@ -120,6 +123,9 @@ class ChaFile:
 			arrMorData = []
 
 			for morUnit in morContent:
+				if "^" in morUnit:
+					log.log(f"Warning: Ambiguous MOR in line {lineNumber}")
+
 				parsedMorUnit = self._parseMorUnit(morUnit)
 				if parsedMorUnit != {}:
 					arrMorData.append( parsedMorUnit )
@@ -129,7 +135,7 @@ class ChaFile:
 	def _parseMorUnit(self, morUnit):
 		if morUnit in MOR_STOP_WORDS:
 			return {}
-
+		
 		sepIndex = morUnit.find("|")
 		if sepIndex > -1:
 			morCategoriaPalabra = morUnit[:sepIndex]
@@ -189,7 +195,7 @@ class ChaFile:
 
 	def __init__(self, chaFilePath,
 				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ], USE_TIERS = [ TIER_MOR ],
-				 CDS_ONLY = False, VERBOSE = False):
+				 CDS_ONLY = False, VERBOSE = False, language = None):
 
 		self.chaFilePath = chaFilePath
 		self.SPEAKER_IGNORE = SPEAKER_IGNORE
@@ -200,7 +206,7 @@ class ChaFile:
 		self.filename = os.path.basename(chaFilePath)
 		self.filename = self.filename[0:self.filename.rfind(".")]
 
-		self._setLanguage()
+		self.setLanguage(language)
 		self.processLines()
 
 	def getLines(self):
@@ -236,23 +242,29 @@ class ChaFile:
 	def getSpeakers(self):
 		return self.speakers
 
-	def _setLanguage(self):
-		LANGUAGE_RE = "@Languages:.(.+)"
+	def setLanguage(self, lang=None):
+		if lang == None:
+			LANGUAGE_RE = "@Languages:.(.+)"
 
-		if not os.path.isfile(self.chaFilePath):
-			raise FileNotFoundError()
+			if not os.path.isfile(self.chaFilePath):
+				raise FileNotFoundError()
 
-		with open(self.chaFilePath, "r") as f:
-			loop = True
-			while loop:
-				line = f.readline()
-				if line:
-					x = re.match(LANGUAGE_RE, line)
-					if x is not None:
-						self.language = x.group(1)
+			with open(self.chaFilePath, "r") as f:
+				loop = True
+				while loop:
+					line = f.readline()
+					if line:
+						x = re.match(LANGUAGE_RE, line)
+						if x is not None:
+							language = x.group(1)
+							if language in [LANGUAGE_SPANISH, LANGUAGE_ENGLISH]:
+								self.language = language
+
+							loop = False
+					else:
 						loop = False
-				else:
-					loop = False
+		else:
+			self.language = lang
 
 		if self.language is None:
 			log.log("Warning: no language found")
@@ -361,7 +373,7 @@ class ChaFile:
 			if line[TIER_XDS] in ADDRESSEE_CORRESPOND:
 				addressee = ADDRESSEE_CORRESPOND[ line[TIER_XDS] ]
 			else:
-				print(f"Warning unknown addressee '{line[TIER_XDS]}' in line '{line[LINE_NUMBER]}'")
+				log.log(f"Warning unknown addressee '{line[TIER_XDS]}' in line '{line[LINE_NUMBER]}'")
 				addressee = ADDRESSEE_XDS_UNKNOWN
 
 		line[LINE_ADDRESSEE] = addressee
@@ -461,111 +473,122 @@ class ChaFile:
 		linea[LINE_NOUNS] = sustantivos
 		return c
 
-	def getVerbs(self, soloIndices = True, CONTAR_COPULA_Y_AUXILIAR = False):
+	# This populates LINE_VERBS
+	def getVerbs(self, indexesOnly = True, countCopAux = False, processLightVerbs = True):
 		for l in self.getLines():
-			self._getVerbsInLine(l, soloIndices, CONTAR_COPULA_Y_AUXILIAR)
+			self.getVerbsInLine(l, indexesOnly, countCopAux, processLightVerbs)
 
-	def _getVerbsInLine(self, linea, soloIndices = True, CONTAR_COPULA_Y_AUXILIAR = False):
-		verbos = []
-		# line = copy.deepcopy(linea)
-		lineaMor={}
-		for i, m in enumerate(linea["mor"]):
-			lineaMor[i] = m
+	def _processLightVerbs(self, lineaMor, indexesOnly, verbos):
+		if self.language == LANGUAGE_SPANISH:
+			# V1 SÍ AUX: ir a, tener que, poder, haber, estar, dejar de, deber, acabar de,
+			# terminar de, haber que, estar por, empezar a, empezar por, comenzar a, poner a, volver a
 
-		# V1 SÍ AUX: ir a, tener que, poder, haber, estar, dejar de, deber, acabar de,
-		# terminar de, haber que, estar por, empezar a, empezar por, comenzar a, poner a, volver a
+			#1) Cuando es auxiliar + infinitivos, contar el infinitivo
+			#2) Cuando es auxiliar + gerundio, contar el gerundio
+			#3) Cuando es auxiliar + participio, contar el participio
 
-		#1) Cuando es auxiliar + infinitivos, contar el infinitivo
-		#2) Cuando es auxiliar + gerundio, contar el gerundio
-		#3) Cuando es auxiliar + participio, contar el participio
+			raices = [
+				[["i"],["a"]],
+				[["tene"],["que"]],
+				[["pode"]],
+				[["habe"]],
+				[["esta"]],
+				#[["deja"],["de"]],    #estos que comenté son los que cambiamos cuando hicimos aclew completo
+				[["debe"]],
+				#[["acaba"],["de"]],
+				#[["termina"],["de"]],
+				[["habe"],["que"]],
+				[["esta"],["por"]],
+				#[["empeza"],["a"]],
+				#[["empeza"],["por"]],
 
-		raices = [
-			[["i"],["a"]],
-			[["tene"],["que"]],
-			[["pode"]],
-			[["habe"]],
-			[["esta"]],
-			[["deja"],["de"]],
-			[["debe"]],
-			[["acaba"],["de"]],
-			[["termina"],["de"]],
-			[["habe"],["que"]],
-			[["esta"],["por"]],
-			[["empeza"],["a"]],
-			[["empeza"],["por"]],
+				#[["comienzo"],["a"]],
+				#[["comenza"],["a"]],
 
-			[["comienzo"],["a"]],
-			[["comenza"],["a"]],
+				#[["pone"],["a"]],
+				#[["volve"],["a"]]
+			]
 
-			[["pone"],["a"]],
-			[["volve"],["a"]]
-		]
+			siguiente_palabra_de_auxiliar = [ "inf", "ger", "part" ]
 
-		siguiente_palabra_de_auxiliar = [ "inf", "ger", "part" ]
+			#4) Cuando es copulativo + gerundio contar el gerundio
+			#5) Cuando es copulativo + participio contar el participio.
 
-		#4) Cuando es copulativo + gerundio contar el gerundio
-		#5) Cuando es copulativo + participio contar el participio.
+			criteriosCategoria = [
+					[ ["cop"],["ger","part"] ]
+			]
 
-		criteriosCategoria = [
-				[ ["cop"],["ger","part"] ]
-		]
+			#6) No contar el copula o auxiliar si está solo (1versión) / contar el cópula o el auxiliar si esta sólo (2 versión)
+			#countCopAux = False # Hago los dos mas abajo
 
-		#6) No contar el copula o auxiliar si está solo (1versión) / contar el cópula o el auxiliar si esta sólo (2 versión)
-		#CONTAR_COPULA_Y_AUXILIAR = False # Hago los dos mas abajo
+			#7) En los casos de 2 o 3 Verbos (verbos conjugado, infinitivo, gerundio o participio), contar el que no es ni auxiliar, ni copula.
+			#estoy contando frase verbal + verbo final
 
-		#7) En los casos de 2 o 3 Verbos (verbos conjugado, infinitivo, gerundio o participio), contar el que no es ni auxiliar, ni copula.
-		#estoy contando frase verbal + verbo final
+			#8) si hay 2 o más verbos conjugados coordinados en una emisión se toman todos.
 
-		#8) si hay 2 o más verbos conjugados coordinados en una emisión se toman todos.
+			#1) 2) y 3) auxiliares    aux + (inf,ger,part)
 
-		#1) 2) y 3) auxiliares    aux + (inf,ger,part)
-
-		for raiz in raices:
-			criteriaType = [ MOR_UNIT_LEXEMA for c in raiz ]
-			criteria = raiz + [siguiente_palabra_de_auxiliar]
-			criteriaType.append(MOR_UNIT_CATEGORIA)
-
-			morIndexes = self._checkCriteria( list(lineaMor.values()), criteria, criteriaType )
-			while len(morIndexes) > 0:
-				trueIndex = list(lineaMor.keys())[ morIndexes[-1] ]
-				if not soloIndices:
-					verbos.append( lineaMor[ trueIndex ] )
-				else:
-					verbos.append( trueIndex )
-
-				trueIndexesToDelete = []
-				for morIndex in morIndexes:
-					trueIndexesToDelete.append( list(lineaMor.keys())[ morIndex ] )
-				for i in trueIndexesToDelete:
-					del lineaMor[ i ]
-
+			for raiz in raices:
 				criteriaType = [ MOR_UNIT_LEXEMA for c in raiz ]
 				criteria = raiz + [siguiente_palabra_de_auxiliar]
 				criteriaType.append(MOR_UNIT_CATEGORIA)
 				morIndexes = self._checkCriteria( list(lineaMor.values()), criteria, criteriaType )
+				# existe el patron
+				while len(morIndexes) > 0:
+					#agarro la última palabra y la agrego como verbo
+					trueIndex = list(lineaMor.keys())[ morIndexes[-1] ]
+					if not indexesOnly:
+						verbos.append( lineaMor[ trueIndex ] )
+					else:
+						verbos.append( trueIndex )
 
-		#cop + (ger | part)
-		for criterio in criteriosCategoria:
-			morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
-			while len(morIndexes) > 0:
-				trueIndex = list(lineaMor.keys())[ morIndexes[1] ]
-				if not soloIndices:
-					verbos.append( lineaMor[trueIndex] )
-				else:
-					verbos.append( trueIndex )
+					trueIndexesToDelete = []
+					for morIndex in morIndexes:
+						trueIndexesToDelete.append( list(lineaMor.keys())[ morIndex ] )
+					for i in trueIndexesToDelete:
+						del lineaMor[ i ]
 
-				trueIndexesToDelete = []
-				for morIndex in morIndexes:
-					trueIndexesToDelete.append( list(lineaMor.keys())[ morIndex ] )
-				for i in trueIndexesToDelete:
-					del lineaMor[ i ]
+					criteriaType = [ MOR_UNIT_LEXEMA for c in raiz ]
+					criteria = raiz + [siguiente_palabra_de_auxiliar]
+					criteriaType.append(MOR_UNIT_CATEGORIA)
+					morIndexes = self._checkCriteria( list(lineaMor.values()), criteria, criteriaType )
 
+			#cop + (ger | part)
+			for criterio in criteriosCategoria:
 				morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
+				while len(morIndexes) > 0:
+					trueIndex = list(lineaMor.keys())[ morIndexes[1] ]
+					if not indexesOnly:
+						verbos.append( lineaMor[trueIndex] )
+					else:
+						verbos.append( trueIndex )
+
+					trueIndexesToDelete = []
+					for morIndex in morIndexes:
+						trueIndexesToDelete.append( list(lineaMor.keys())[ morIndex ] )
+					for i in trueIndexesToDelete:
+						del lineaMor[ i ]
+
+					morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
+		elif self.language == LANGUAGE_ENGLISH:
+			pass
+
+		return lineaMor
+	def getVerbsInLine(self, linea, indexesOnly = True, countCopAux = False, processLightVerbs = True ):
+		verbos = []
+		# no se borra nada del MOR original
+		lineaMor={}
+		for i, m in enumerate(linea["mor"]):
+			lineaMor[i] = m
+
+		if processLightVerbs:
+			assert self.language != None, "language not set"
+			lineaMor = self._processLightVerbs(lineaMor, indexesOnly, verbos)
 
 		#verbos normales
 		verbosIndividualesAContar = CATEGORIAS_VERBOS.copy()
 
-		if not CONTAR_COPULA_Y_AUXILIAR:
+		if not countCopAux:
 			verbosIndividualesAContar.remove("cop")
 			verbosIndividualesAContar.remove("aux")
 
@@ -573,7 +596,7 @@ class ChaFile:
 		while len(morIndexes) > 0:
 			trueIndex = list(lineaMor.keys())[ morIndexes[0] ]
 
-			if not soloIndices:
+			if not indexesOnly:
 				verbos.append( lineaMor[trueIndex] )
 			else:
 				verbos.append( trueIndex )
@@ -587,11 +610,14 @@ class ChaFile:
 			morIndexes = self._checkCriteria( list(lineaMor.values()), [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
 
 		linea[LINE_VERBS] = verbos
-	def countVerbsByAddressee(self):
+		
+		return verbos
+
+	def countVerbsByAddressee(self, countCopAux = False, processLightVerbs = True):
 		addressees = {}
 
 		for l in self.getLines():
-			c = self.countVerbsInLine(l)
+			c = self.countVerbsInLine(l, countCopAux, processLightVerbs)
 
 			addressee = l[LINE_ADDRESSEE]
 			if addressee in addressees:
@@ -600,118 +626,12 @@ class ChaFile:
 				addressees[addressee] = c
 
 		return addressees
-	def countVerbs(self, CONTAR_COPULA_Y_AUXILIAR = False):
+	def countVerbs(self, countCopAux = False, processLightVerbs = True):
 		for l in self.getLines():
-			self.countVerbsInLine(l, CONTAR_COPULA_Y_AUXILIAR)
-
-	def countVerbsInLine(self, linea, CONTAR_COPULA_Y_AUXILIAR = False):
-		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
-		import copy
-
-		verbos = {}
-		line = copy.deepcopy(linea)
-
-		def sumarVerbo(verbo):
-			if verbo in verbos:
-				verbos[verbo] += 1
-			else:
-				verbos[verbo] = 1
-
-		# V1 SÍ AUX: ir a, tener que, poder, haber, estar, dejar de, deber, acabar de,
-		# terminar de, haber que, estar por, empezar a, empezar por, comenzar a, poner a, volver a
-
-
-		#1) Cuando es auxiliar + infinitivos, contar el infinitivo
-		#2) Cuando es auxiliar + gerundio, contar el gerundio
-		#3) Cuando es auxiliar + participio, contar el participio
-
-		raices = [
-			[["i"],["a"]],
-			[["tene"],["que"]],
-			[["pode"]],
-			[["habe"]],
-			[["esta"]],
-			[["deja"],["de"]],
-			[["debe"]],
-			[["acaba"],["de"]],
-			[["termina"],["de"]],
-			[["habe"],["que"]],
-			[["esta"],["por"]],
-			[["empeza"],["a"]],
-			[["empeza"],["por"]],
-
-			[["comienzo"],["a"]],
-			[["comenza"],["a"]],
-
-			[["pone"],["a"]],
-			[["volve"],["a"]]
-		]
-
-		siguiente_palabra_de_auxiliar = [ "inf", "ger", "part" ]
-
-		#4) Cuando es copulativo + gerundio contar el gerundio
-		#5) Cuando es copulativo + participio contar el participio.
-
-		criteriosCategoria = [
-				[ ["cop"],["ger","part"] ]
-		]
-
-		#6) No contar el copula o auxiliar si está solo (1versión) / contar el cópula o el auxiliar si esta sólo (2 versión)
-		#CONTAR_COPULA_Y_AUXILIAR = False # Hago los dos mas abajo
-
-		#7) En los casos de 2 o 3 Verbos (verbos conjugado, infinitivo, gerundio o participio), contar el que no es ni auxiliar, ni copula.
-		#estoy contando frase verbal + verbo final
-
-		#8) si hay 2 o más verbos conjugados coordinados en una emisión se toman todos.
-
-		#1) 2) y 3) auxiliares    aux + (inf,ger,part)
-
-		for raiz in raices:
-			criteriaType = [ MOR_UNIT_LEXEMA for c in raiz ]
-			criteria = raiz + [siguiente_palabra_de_auxiliar]
-			criteriaType.append(MOR_UNIT_CATEGORIA)
-			morIndexes = self._checkCriteria( line["mor"], criteria, criteriaType )
-			while len(morIndexes) > 0:
-				lexemaFinal = line["mor"][ morIndexes[-1] ][MOR_UNIT_LEXEMA]
-				sumarVerbo(lexemaFinal)
-				del line["mor"][ morIndexes[0]:(morIndexes[-1]+1) ]
-
-				criteriaType = [ MOR_UNIT_LEXEMA for c in raiz ]
-				criteria = raiz + [siguiente_palabra_de_auxiliar]
-				criteriaType.append(MOR_UNIT_CATEGORIA)
-				morIndexes = self._checkCriteria( line["mor"], criteria, criteriaType )
-
-		#cop + (ger | part)
-		for criterio in criteriosCategoria:
-			morIndexes = self._checkCriteria( line["mor"], criterio, MOR_UNIT_CATEGORIA )
-			while len(morIndexes) > 0:
-				verboAContar = line["mor"][ morIndexes[1] ]
-				sumarVerbo( verboAContar[ MOR_UNIT_LEXEMA ] )
-
-				del line["mor"][ morIndexes[0]:(morIndexes[-1]+1) ]
-
-				morIndexes = self._checkCriteria( line["mor"], criterio, MOR_UNIT_CATEGORIA )
-
-		#verbos normales
-		verbosIndividualesAContar = CATEGORIAS_VERBOS.copy()
-
-		if not CONTAR_COPULA_Y_AUXILIAR:
-			verbosIndividualesAContar.remove("cop")
-			verbosIndividualesAContar.remove("aux")
-
-		morIndexes = self._checkCriteria( line["mor"], [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
-		while len(morIndexes) > 0:
-			verboAContar = line["mor"][ morIndexes[0] ]
-			sumarVerbo( verboAContar[ MOR_UNIT_LEXEMA ] )
-			del line["mor"][ morIndexes[0]:(morIndexes[-1]+1) ]
-			morIndexes = self._checkCriteria( line["mor"], [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
-
-		linea[LINE_VERBS] = verbos
-
-		c=0
-		for v in verbos:
-			c+= verbos[v]
-		return c
+			self.countVerbsInLine(l, countCopAux, processLightVerbs)
+	def countVerbsInLine(self, linea, countCopAux = False, processLightVerbs = True):
+		verbos = self.getVerbsInLine(linea, True, countCopAux, processLightVerbs)
+		return len(verbos)
 
 	# busca lineas cuyo mor cumplan cierto criterio
 	#

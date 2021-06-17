@@ -43,5 +43,5 @@ class Log():
 		print("[DEBUG] " + what)
 
 	def end(self):
-		with open(self.logPath, "w+") as f:
+		with open(self.logPath, "a+") as f:
 			f.write( "\n[{}] Finished\n".format(datetime.datetime.now()) )
