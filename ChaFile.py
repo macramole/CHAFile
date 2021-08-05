@@ -37,6 +37,7 @@ LINE_SPEAKER = "hablante"
 LINE_ADDRESSEE = "destinatario"
 LINE_BULLET = "bullet"
 LINE_NOUNS = "sustantivos"
+LINE_ADJECTIVES = "adjetivos"
 LINE_VERBS = "verbos"
 
 #BULLET_TAG = "%snd"
@@ -71,6 +72,7 @@ TIER_PRAGMATIC_FUNCTION_FUNCTIONS = [
 	"IND",
 ]
 
+## Internal use only. Use SPEAKER_*
 ADDRESSEE_TAG = "[+ %s]"
 ADDRESSEE_XDS_CHILD = "C"
 ADDRESSEE_XDS_OTHER = "O"
@@ -79,7 +81,12 @@ ADDRESSEE_XDS_ADULT = "A"
 ADDRESSEE_XDS_TARGET_CHILD = "T"
 ADDRESSEE_XDS_PET = "P"
 ADDRESSEE_XDS_BOTH = "B"
-#BOTH ?
+###############
+
+ADDRESSEE_CHILD_DIRECTED = "cds"
+ADDRESSEE_CHILD_PRODUCED = "chi"
+ADDRESSEE_OVER_HEARD = "ohs"
+ADDRESSEE_ALL = "all"
 
 SPEAKER_SILENCE = "*SIL"
 SPEAKER_TARGET_CHILD = "CHI"
@@ -101,6 +108,8 @@ ADDRESSEE_CORRESPOND = {
 }
 
 CATEGORIAS_VERBOS = ["v","ger","part","aux","imp","inf","cop"] #habia sacado "cop" en variation sets y saque "co" porque toma cualquier cosa
+CATEGORIAS_ADJETIVOS = ["adj"]
+CATEGORIAS_SUSTANTIVOS = ["n"]
 
 MISSING_VALUE = "?"
 
@@ -108,6 +117,9 @@ CLAN_BIN_PATH = os.path.join( os.path.dirname(__file__), "./clanBin/" )
 
 LANGUAGE_SPANISH = "spa"
 LANGUAGE_ENGLISH = "eng"
+
+COUNT_TYPE_TOKENS = "tokens"
+COUNT_TYPE_TYPES = "types"
 
 log = Log()
 
@@ -117,6 +129,11 @@ class ChaFile:
 	lines = []
 	speakers = []
 	language = None
+	morAmbiguousLines = []
+
+	processedVerbs = False
+	processedNouns = False
+	processedAdjectives = False
 
 	def _parseMor(self, morContent, lineNumber):
 			morContent = morContent.split(" ")
@@ -125,7 +142,8 @@ class ChaFile:
 
 			for morUnit in morContent:
 				if "^" in morUnit:
-					log.log(f"Warning: Ambiguous MOR in line {lineNumber}")
+					if lineNumber not in self.morAmbiguousLines:
+						self.morAmbiguousLines.append(lineNumber)
 
 				parsedMorUnit = self._parseMorUnit(morUnit)
 				if parsedMorUnit != {}:
@@ -167,6 +185,9 @@ class ChaFile:
 				}
 
 				return parsedMorUnit
+			else:
+				log.log(f"Warning: Malformed mor unit \"{morUnit}\"")
+				return {}
 		else:
 			return {}
 
@@ -313,6 +334,10 @@ class ChaFile:
 			content = rowCells[INDEX_CONTENIDO].firstChild.firstChild.data
 			speaker = rowCells[INDEX_SPEAKER].firstChild.firstChild.data
 
+			# In some cases speaker is not being parsed correctly
+			if speaker[0] == "*":
+				speaker = speaker[1:]
+
 			if speaker in self.SPEAKER_IGNORE:
 				continue
 			if not speaker in self.speakers:
@@ -432,14 +457,14 @@ class ChaFile:
 
 		return c
 
-	def countNouns(self):
-		for l in self.getLines():
-			self.countNounsInLine(l)
 	def countNounsByAddressee(self):
+		if not self.processedNouns:
+			self.populateNouns()
+
 		addressees = {}
 
 		for l in self.getLines():
-			c = self.countNounsInLine(l)
+			c = len( l[LINE_NOUNS] )
 
 			addressee = l[LINE_ADDRESSEE]
 			if addressee in addressees:
@@ -448,32 +473,80 @@ class ChaFile:
 				addressees[addressee] = c
 
 		return addressees
-	def countNounsInLine(self, linea):
+
+	def getNounsInLine(self, linea):
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
-		sustantivos = {}
+		nouns = []
 
-		def sumarSustantivos(sust):
-			if sust in sustantivos:
-				sustantivos[sust] += 1
-			else:
-				sustantivos[sust] = 1
-
-		c = 0
 		if linea[TIER_MOR] != MISSING_VALUE: 	
-			for morUnit in linea[TIER_MOR]:
-				if morUnit[MOR_UNIT_CATEGORIA] == "n":
-					c += 1 
-					sumarSustantivos( morUnit[MOR_UNIT_LEXEMA] )
+			for i, morUnit in enumerate(linea[TIER_MOR]):
+				if morUnit[MOR_UNIT_CATEGORIA] in CATEGORIAS_SUSTANTIVOS:
+					nouns.append(i)
+		
+		return nouns
 
-		linea[LINE_NOUNS] = sustantivos
-		return c
+	def populateNouns(self):
+		"""Populate LINE_NOUNS of every line with the indexes of the MOR line where nouns are found
+		"""
+		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
+		
+		for linea in self.getLines():
+			linea[LINE_NOUNS] = self.getNounsInLine(linea)
+		
+		self.processedNouns = True
 
-	# This populates LINE_VERBS
-	def getVerbs(self, indexesOnly = True, countCopAux = False, processLightVerbs = True):
+	def countAdjectivesByAddressee(self):
+		if not self.processedAdjectives:
+			self.populateAdjectives()
+
+		addressees = {}
+
 		for l in self.getLines():
-			self.getVerbsInLine(l, indexesOnly, countCopAux, processLightVerbs)
+			c = len(l[LINE_ADJECTIVES])
 
-	def _processLightVerbs(self, lineaMor, indexesOnly, verbos):
+			addressee = l[LINE_ADDRESSEE]
+			if addressee in addressees:
+				addressees[addressee] += c
+			else:
+				addressees[addressee] = c
+
+		return addressees
+	def getAdjectivesInLine(self, linea):
+		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
+		adjetivos = []
+
+		if linea[TIER_MOR] != MISSING_VALUE: 	
+			for i, morUnit in enumerate(linea[TIER_MOR]):
+				if morUnit[MOR_UNIT_CATEGORIA] in CATEGORIAS_ADJETIVOS:
+					adjetivos.append(i)
+		
+		return adjetivos
+	
+	def populateAdjectives(self):
+		"""Populate LINE_ADJECTIVES of every line with the indexes of the MOR line where adjectives are found
+		"""
+		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
+		
+		for linea in self.getLines():
+			linea[LINE_ADJECTIVES] = self.getAdjectivesInLine(linea)
+		
+		self.processedAdjectives = True
+
+	def populateVerbs(self, countCopAux = False, processLightVerbs = True):
+		"""Populate LINE_VERBS of every line with the indexes of the MOR line where verbs are found
+
+		Args:
+			countCopAux (bool, optional): Should we count cop and aux as verbs ?. Defaults to False.
+			processLightVerbs (bool, optional): Should we process light verbs. Defaults to True.
+		"""
+		if self.processedVerbs: return
+
+		for l in self.getLines():
+			self.getVerbsInLine(l, countCopAux, processLightVerbs)
+		
+		self.processedVerbs = True
+
+	def _processLightVerbs(self, lineaMor, verbos):
 		if self.language == LANGUAGE_SPANISH:
 			# V1 SÍ AUX: ir a, tener que, poder, haber, estar, dejar de, deber, acabar de,
 			# terminar de, haber que, estar por, empezar a, empezar por, comenzar a, poner a, volver a
@@ -532,10 +605,7 @@ class ChaFile:
 				while len(morIndexes) > 0:
 					#agarro la última palabra y la agrego como verbo
 					trueIndex = list(lineaMor.keys())[ morIndexes[-1] ]
-					if not indexesOnly:
-						verbos.append( lineaMor[ trueIndex ] )
-					else:
-						verbos.append( trueIndex )
+					verbos.append( trueIndex )
 
 					trueIndexesToDelete = []
 					for morIndex in morIndexes:
@@ -553,10 +623,7 @@ class ChaFile:
 				morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
 				while len(morIndexes) > 0:
 					trueIndex = list(lineaMor.keys())[ morIndexes[1] ]
-					if not indexesOnly:
-						verbos.append( lineaMor[trueIndex] )
-					else:
-						verbos.append( trueIndex )
+					verbos.append( trueIndex )
 
 					trueIndexesToDelete = []
 					for morIndex in morIndexes:
@@ -569,7 +636,8 @@ class ChaFile:
 			pass
 
 		return lineaMor
-	def getVerbsInLine(self, linea, indexesOnly = True, countCopAux = False, processLightVerbs = True ):
+
+	def getVerbsInLine(self, linea, countCopAux = False, processLightVerbs = True ):
 		verbos = []
 		# no se borra nada del MOR original
 		lineaMor={}
@@ -578,7 +646,7 @@ class ChaFile:
 
 		if processLightVerbs:
 			assert self.language != None, "language not set"
-			lineaMor = self._processLightVerbs(lineaMor, indexesOnly, verbos)
+			lineaMor = self._processLightVerbs(lineaMor, verbos)
 
 		#verbos normales
 		verbosIndividualesAContar = CATEGORIAS_VERBOS.copy()
@@ -590,11 +658,7 @@ class ChaFile:
 		morIndexes = self._checkCriteria( list(lineaMor.values()), [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
 		while len(morIndexes) > 0:
 			trueIndex = list(lineaMor.keys())[ morIndexes[0] ]
-
-			if not indexesOnly:
-				verbos.append( lineaMor[trueIndex] )
-			else:
-				verbos.append( trueIndex )
+			verbos.append( trueIndex )
 
 			trueIndexesToDelete = []
 			for morIndex in morIndexes:
@@ -611,8 +675,11 @@ class ChaFile:
 	def countVerbsByAddressee(self, countCopAux = False, processLightVerbs = True):
 		addressees = {}
 
+		if not self.processedVerbs:
+			self.populateVerbs(countCopAux=countCopAux, processLightVerbs=processLightVerbs)
+
 		for l in self.getLines():
-			c = self.countVerbsInLine(l, countCopAux, processLightVerbs)
+			c = len( l[LINE_VERBS] )
 
 			addressee = l[LINE_ADDRESSEE]
 			if addressee in addressees:
@@ -621,12 +688,62 @@ class ChaFile:
 				addressees[addressee] = c
 
 		return addressees
-	def countVerbs(self, countCopAux = False, processLightVerbs = True):
-		for l in self.getLines():
-			self.countVerbsInLine(l, countCopAux, processLightVerbs)
-	def countVerbsInLine(self, linea, countCopAux = False, processLightVerbs = True):
-		verbos = self.getVerbsInLine(linea, True, countCopAux, processLightVerbs)
-		return len(verbos)
+	
+	def count(self, what, addressee=ADDRESSEE_ALL, countType=COUNT_TYPE_TOKENS, countCopAux = False, processLightVerbs = True):
+		"""Count tokens or types of nouns, verbs or adjectives
+
+		Args:
+			what ([type]): LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES
+			addressee ([type], optional): ADDRESSEE_ALL, ADDRESSEE_CHILD_DIRECTED, ADDRESSEE_OVER_HEARD or ADDRESSEE_CHILD_PRODUCED. Defaults to ADDRESSEE_ALL.
+			countType ([type], optional): COUNT_TYPE_TOKENS or COUNT_TYPE_TYPES. Defaults to COUNT_TYPE_TOKENS.
+			countCopAux (bool, optional): Should we count cop and aux as verbs ?. Defaults to False.
+			processLightVerbs (bool, optional): Should we process light verbs. Defaults to True.
+			
+		Returns:
+			int: count
+		"""
+
+		if what not in [ LINE_VERBS, LINE_NOUNS, LINE_ADJECTIVES ]:
+			raise "what should be LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES"
+
+		if what == LINE_VERBS and not self.processedVerbs:
+			self.populateVerbs(countCopAux=countCopAux, processLightVerbs=processLightVerbs)
+		elif what == LINE_NOUNS and not self.processedNouns:
+			self.populateNouns()
+		elif what == LINE_ADJECTIVES and not self.processedAdjectives:
+			self.populateAdjectives()
+		
+		c = {}
+		
+		def add(l):
+			nonlocal c
+
+			for v in l:
+				if v in c:
+					c[v] += 1
+				else:
+					c[v] = 1
+		
+		if addressee == ADDRESSEE_ALL:
+			for l in self.getLines():
+				add( l[what] )
+		elif addressee == ADDRESSEE_CHILD_DIRECTED:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
+					add( l[what] )
+		elif addressee == ADDRESSEE_CHILD_PRODUCED:
+			for l in self.getLines():
+				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
+					add( l[what] )
+		elif addressee == ADDRESSEE_OVER_HEARD:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
+					add( l[what] )
+		
+		if countType == COUNT_TYPE_TOKENS:
+			return sum(c.values())
+		else:
+			return len(c.keys())
 
 	# busca lineas cuyo mor cumplan cierto criterio
 	#
