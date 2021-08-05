@@ -13,6 +13,49 @@ from subprocess import getstatusoutput
 import re
 from log import Log
 
+# If you haven't created a symlink "clanBin" to CLAN binaries
+# Change this to point to your CLAN binaries
+CLAN_BIN_PATH = os.path.join( os.path.dirname(__file__), "./clanBin/" )
+
+# LINE constants. Use these for getting data from each line
+LINE_UTTERANCE = "emisión"
+LINE_NUMBER = "número"
+LINE_SPEAKER = "hablante"
+LINE_ADDRESSEE = "destinatario"
+LINE_BULLET = "bullet"
+LINE_NOUNS = "sustantivos"
+LINE_ADJECTIVES = "adjetivos"
+LINE_VERBS = "verbos"
+#################################
+
+# Speaker constants. line[LINE_SPEAKER] will be one of these
+SPEAKER_SILENCE = "*SIL"
+SPEAKER_TARGET_CHILD = "CHI"
+SPEAKER_OTHER_CHILD = "OCH"
+SPEAKER_ADULT = "ADULT"
+SPEAKER_PET = "P"
+SPEAKER_OTHER = "OTHER"
+SPEAKER_UNKNOWN = "UNKNOWN"
+SPEAKER_BOTH = "BOTH" #ADULT + (TARGET || CHILD) This is a problem so we are discarding it
+###############################################
+
+# Use these constants for calling count method
+ADDRESSEE_CHILD_DIRECTED = "cds"
+ADDRESSEE_CHILD_PRODUCED = "chi"
+ADDRESSEE_OVER_HEARD = "ohs"
+ADDRESSEE_ALL = "all"
+
+COUNT_TYPE_TOKENS = "tokens"
+COUNT_TYPE_TYPES = "types"
+###############################################
+
+# Language constants
+LANGUAGE_SPANISH = "spa"
+LANGUAGE_ENGLISH = "eng"
+######################
+
+# MOR constants. 
+# i.e line[TIER_MOR][0][MOR_UNIT_LEXEMA] will store the lexeme of the first word 
 ERROR_NO_MOR_FOUND = 1
 
 MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
@@ -30,19 +73,11 @@ MOR_REPLACEMENTS = { #reemplazo de palabras que está agarrando mal el MOR, ej: 
 	"mami" : "mamá",
 	"vamos" : "i" #co|vamos -> co|i esto es porque toma como "co" algo que es "v"
 }
+###############################
 
-LINE_UTTERANCE = "emisión"
-LINE_NUMBER = "número"
-LINE_SPEAKER = "hablante"
-LINE_ADDRESSEE = "destinatario"
-LINE_BULLET = "bullet"
-LINE_NOUNS = "sustantivos"
-LINE_ADJECTIVES = "adjetivos"
-LINE_VERBS = "verbos"
-
-#BULLET_TAG = "%snd"
 BULLET_TAG = "{0x15}"
 
+# TIER constants
 TIER_MOR = "mor"
 TIER_XDS = "xds"
 TIER_PRAGMATIC_FUNCTION = "pra"
@@ -71,6 +106,7 @@ TIER_PRAGMATIC_FUNCTION_FUNCTIONS = [
 	"DEV",
 	"IND",
 ]
+###############################
 
 ## Internal use only. Use SPEAKER_*
 ADDRESSEE_TAG = "[+ %s]"
@@ -83,20 +119,7 @@ ADDRESSEE_XDS_PET = "P"
 ADDRESSEE_XDS_BOTH = "B"
 ###############
 
-ADDRESSEE_CHILD_DIRECTED = "cds"
-ADDRESSEE_CHILD_PRODUCED = "chi"
-ADDRESSEE_OVER_HEARD = "ohs"
-ADDRESSEE_ALL = "all"
-
-SPEAKER_SILENCE = "*SIL"
-SPEAKER_TARGET_CHILD = "CHI"
-SPEAKER_OTHER_CHILD = "OCH"
-SPEAKER_ADULT = "ADULT"
-SPEAKER_PET = "P"
-SPEAKER_OTHER = "OTHER"
-SPEAKER_UNKNOWN = "UNKNOWN"
-SPEAKER_BOTH = "BOTH" #ADULT + (TARGET || CHILD) This is a problem so we are discarding it
-
+# Internal use
 ADDRESSEE_CORRESPOND = {
 	ADDRESSEE_XDS_CHILD : SPEAKER_OTHER_CHILD,
 	ADDRESSEE_XDS_OTHER : SPEAKER_OTHER,
@@ -112,14 +135,7 @@ CATEGORIAS_ADJETIVOS = ["adj"]
 CATEGORIAS_SUSTANTIVOS = ["n"]
 
 MISSING_VALUE = "?"
-
-CLAN_BIN_PATH = os.path.join( os.path.dirname(__file__), "./clanBin/" )
-
-LANGUAGE_SPANISH = "spa"
-LANGUAGE_ENGLISH = "eng"
-
-COUNT_TYPE_TOKENS = "tokens"
-COUNT_TYPE_TYPES = "types"
+###############################################
 
 log = Log()
 
@@ -136,22 +152,39 @@ class ChaFile:
 	processedAdjectives = False
 
 	def _parseMor(self, morContent, lineNumber):
-			morContent = morContent.split(" ")
+		"""Internal use. Parse MOR tier
 
-			arrMorData = []
+		Args:
+			morContent (string): Content of the MOR tier
+			lineNumber (int): Line number
 
-			for morUnit in morContent:
-				if "^" in morUnit:
-					if lineNumber not in self.morAmbiguousLines:
-						self.morAmbiguousLines.append(lineNumber)
+		Returns:
+			list: Parsed MOR tier
+		"""
+		morContent = morContent.split(" ")
 
-				parsedMorUnit = self._parseMorUnit(morUnit)
-				if parsedMorUnit != {}:
-					arrMorData.append( parsedMorUnit )
+		arrMorData = []
 
-			return arrMorData
+		for morUnit in morContent:
+			if "^" in morUnit:
+				if lineNumber not in self.morAmbiguousLines:
+					self.morAmbiguousLines.append(lineNumber)
+
+			parsedMorUnit = self._parseMorUnit(morUnit)
+			if parsedMorUnit != {}:
+				arrMorData.append( parsedMorUnit )
+
+		return arrMorData
 
 	def _parseMorUnit(self, morUnit):
+		"""Internal use. Parse a MOR unit (one word)
+
+		Args:
+			morUnit (string): One word as described by MOR
+
+		Returns:
+			dict: A dict representation of the MOR unit
+		"""
 		if morUnit in MOR_STOP_WORDS:
 			return {}
 		
@@ -192,6 +225,15 @@ class ChaFile:
 			return {}
 
 	def _parsePra(self, praContent, lineNumber):
+		"""Internal use. Parse pragmatic function
+
+		Args:
+			praContent (string): Content of the %pra tier
+			lineNumber (int): Line number
+
+		Returns:
+			string: PRA code
+		"""
 		pra = praContent.strip()[1:].strip()
 		if not pra in TIER_PRAGMATIC_FUNCTION_FUNCTIONS:
 			log.log("Warning. Pragmatic function %s is invalid. Using %s (line %d)" % (MISSING_VALUE, pra, lineNumber))
@@ -200,6 +242,15 @@ class ChaFile:
 		return pra
 
 	def _parseDad(self, dadContent, lineNumber):
+		"""Internal use. Parse activity type tier (%dad)
+
+		Args:
+			dadContent (string): Content of the %dad tier
+			lineNumber (int): Line number
+
+		Returns:
+			list: List of activity types as strings
+		"""
 		dads = dadContent.strip()[1:].split(":")
 
 		for dad in dads:
@@ -212,6 +263,16 @@ class ChaFile:
 	def __init__(self, chaFilePath,
 				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ], USE_TIERS = [ TIER_MOR ],
 				 CDS_ONLY = False, VERBOSE = False, language = None):
+		"""Constructor. Loads the CHA file and parse it
+
+		Args:
+			chaFilePath (string): Path to the CHA file
+			SPEAKER_IGNORE (list, optional): Utterances from these speakers won't be parsed. Defaults to [ SPEAKER_SILENCE ].
+			USE_TIERS (list, optional): Tiers to include when parsing the CHA file. Defaults to [ TIER_MOR ].
+			CDS_ONLY (bool, optional): Only child directed utterances will be parsed. Defaults to False.
+			VERBOSE (bool, optional): Extra information will be printed when processing. Defaults to False.
+			language (string, optional): Use one of the LANGUAGE constants or None for parsing it from the CHA file. Defaults to None.
+		"""
 
 		self.chaFilePath = chaFilePath
 		self.SPEAKER_IGNORE = SPEAKER_IGNORE
@@ -226,9 +287,22 @@ class ChaFile:
 		self.processLines()
 
 	def getLines(self):
+		"""Get an array of parsed utterances
+
+		Returns:
+			list: Utterances. Access data using the LINE constants
+		"""
 		return self.lines
 
 	def getLine(self, lineNumber):
+		"""Get a line by its number
+
+		Args:
+			lineNumber (int): Line number
+
+		Returns:
+			dict: Utterance
+		"""
 		for line in self.lines:
 			if line[LINE_NUMBER] == lineNumber:
 				return line
@@ -236,6 +310,15 @@ class ChaFile:
 		return None
 
 	def getLinesFromTo(self, lineFrom, lineTo):
+		"""Get a range of utterances
+
+		Args:
+			lineFrom (int): Line number from
+			lineTo (int): Line number to
+
+		Returns:
+			list: Utterances. Access data using the LINE constants
+		"""
 		linesToReturn = []
 
 		for line in self.lines:
@@ -245,6 +328,11 @@ class ChaFile:
 		return linesToReturn
 
 	def getLinesBySpeakers(self):
+		"""Get all parsed utterance grouped by speaker
+
+		Returns:
+			list: Utterances. Access data using the LINE constants
+		"""
 		linesBySpeakers = {}
 
 		for line in self.lines:
@@ -256,9 +344,22 @@ class ChaFile:
 		return linesBySpeakers
 
 	def getSpeakers(self):
+		"""Get all speakers involved in this transcription
+
+		Returns:
+			list: Speakers
+		"""
 		return self.speakers
 
 	def setLanguage(self, lang=None):
+		"""Set language for this transcription. It will be used for processing light verbs
+
+		Args:
+			lang (string, optional): Use LANGUAGE constant or None for parsing it from the CHA file. Defaults to None.
+
+		Raises:
+			FileNotFoundError: -
+		"""
 		if lang == None:
 			LANGUAGE_RE = "@Languages:.(.+)"
 
@@ -285,9 +386,21 @@ class ChaFile:
 		if self.language is None:
 			log.log("Warning: no language found")
 	def getLanguage(self):
+		"""Return current language
+
+		Returns:
+			string: Language
+		"""
 		return self.language
 
 	def processLines(self):
+		"""Internal use. Main function that parses the CHA file
+
+		Raises:
+			FileNotFoundError: The path to the CHA file does not exist
+			IOError: kwal command not found. Is CLAN_BIN_PATH properly set ?
+			IOError: MOR tier not found
+		"""
 		INDEX_CONTENIDO = 13
 		INDEX_LINENUMBER = 12
 		INDEX_SPEAKER = 3
@@ -380,6 +493,11 @@ class ChaFile:
 				self.lines.append(line)
 
 	def _setAddressee(self, line):
+		"""Internal use. Set normalized addressee 
+
+		Args:
+			line (dict): Utterance
+		"""
 		addressee = SPEAKER_ADULT
 
 		if not TIER_XDS in line:
@@ -417,9 +535,19 @@ class ChaFile:
 		# return addressee, strLine
 
 	def countUtterances(self):
+		"""Returns number of utterances
+
+		Returns:
+			int: Number of utterances in the current transcript
+		"""
 		return len(self.lines)
 
 	def countUtterancesByAddressee(self):
+		"""Returns number of utterances grouped by addressee
+
+		Returns:
+			dict: Number of utterances by addressee
+		"""
 		addressees = {}
 
 		for l in self.getLines():
@@ -432,6 +560,11 @@ class ChaFile:
 		return addressees
 
 	def countWordsByAddressee(self):
+		"""Count words grouped by addressee
+
+		Returns:
+			dict: Number of words grouped by addresee
+		"""
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		addressees = {}
 
@@ -447,6 +580,14 @@ class ChaFile:
 		return addressees
 
 	def countWordsInLine(self, line):
+		"""Number of words in the utterance
+
+		Args:
+			line (dict): A parsed utterance from getLines()
+
+		Returns:
+			int: Number of words in the utterance
+		"""
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		dontCount = ["cm"] #no cuentes la coma
 
@@ -458,6 +599,11 @@ class ChaFile:
 		return c
 
 	def countNounsByAddressee(self):
+		"""Number of nouns grouped by addressee
+
+		Returns:
+			dict: Addressees and number of nouns
+		"""
 		if not self.processedNouns:
 			self.populateNouns()
 
@@ -475,6 +621,14 @@ class ChaFile:
 		return addressees
 
 	def getNounsInLine(self, linea):
+		"""Returns a list of indexes of nouns in the MOR tier
+
+		Args:
+			linea (dict): Utterance
+
+		Returns:
+			list: List of indexes
+		"""
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		nouns = []
 
@@ -486,7 +640,7 @@ class ChaFile:
 		return nouns
 
 	def populateNouns(self):
-		"""Populate LINE_NOUNS of every line with the indexes of the MOR line where nouns are found
+		"""Populate LINE_NOUNS for every line with the indexes of the MOR line where nouns are found
 		"""
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		
@@ -496,6 +650,11 @@ class ChaFile:
 		self.processedNouns = True
 
 	def countAdjectivesByAddressee(self):
+		"""Number of adjectives grouped by addressee
+
+		Returns:
+			dict: Addressees and number of adjectives
+		"""
 		if not self.processedAdjectives:
 			self.populateAdjectives()
 
@@ -512,6 +671,14 @@ class ChaFile:
 
 		return addressees
 	def getAdjectivesInLine(self, linea):
+		"""Returns a list of indexes of adjectives in the MOR tier
+
+		Args:
+			linea (dict): Utterance
+
+		Returns:
+			list: List of indexes
+		"""
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		adjetivos = []
 
@@ -523,7 +690,7 @@ class ChaFile:
 		return adjetivos
 	
 	def populateAdjectives(self):
-		"""Populate LINE_ADJECTIVES of every line with the indexes of the MOR line where adjectives are found
+		"""Populate LINE_ADJECTIVES of every line with the indexes of the MOR tier where adjectives are found
 		"""
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
 		
@@ -533,7 +700,7 @@ class ChaFile:
 		self.processedAdjectives = True
 
 	def populateVerbs(self, countCopAux = False, processLightVerbs = True):
-		"""Populate LINE_VERBS of every line with the indexes of the MOR line where verbs are found
+		"""Populate LINE_VERBS for every line with the indexes of the MOR tier where verbs are found
 
 		Args:
 			countCopAux (bool, optional): Should we count cop and aux as verbs ?. Defaults to False.
@@ -547,6 +714,15 @@ class ChaFile:
 		self.processedVerbs = True
 
 	def _processLightVerbs(self, lineaMor, verbos):
+		"""Internal use. Language dependent. Process light verbs to be skipped when counting verbs
+
+		Args:
+			lineaMor (dict): MOR tier for an utterance
+			verbos (list): List of verbs
+
+		Returns:
+			list: MOR tier without light verbs
+		"""
 		if self.language == LANGUAGE_SPANISH:
 			# V1 SÍ AUX: ir a, tener que, poder, haber, estar, dejar de, deber, acabar de,
 			# terminar de, haber que, estar por, empezar a, empezar por, comenzar a, poner a, volver a
@@ -638,6 +814,16 @@ class ChaFile:
 		return lineaMor
 
 	def getVerbsInLine(self, linea, countCopAux = False, processLightVerbs = True ):
+		"""Gets verbs in line and store them in LINE_VERBS
+
+		Args:
+			linea (dict): Utterance from getLines()
+			countCopAux (bool, optional): Should we count cop and aux. Defaults to False.
+			processLightVerbs (bool, optional): Should we skip light verbs. Defaults to True.
+
+		Returns:
+			list: Array of indexes to verbs
+		"""
 		verbos = []
 		# no se borra nada del MOR original
 		lineaMor={}
@@ -673,6 +859,13 @@ class ChaFile:
 		return verbos
 
 	def countVerbsByAddressee(self, countCopAux = False, processLightVerbs = True):
+		"""Number of verbs grouped by addressee
+		Args:
+			countCopAux (bool, optional): Should we count cop and aux. Defaults to False.
+			processLightVerbs (bool, optional): Should we skip light verbs. Defaults to True.
+		Returns:
+			dict: Addressees and number of verbs
+		"""
 		addressees = {}
 
 		if not self.processedVerbs:
@@ -745,17 +938,17 @@ class ChaFile:
 		else:
 			return len(c.keys())
 
-	# busca lineas cuyo mor cumplan cierto criterio
-	#
-	# el criterio es de la siguiente manera
-	# [ ["categoria mor"], ["categoria mor","categoria mor2"] ]
-	# tiene que haber dos palabras juntas. la primera con "categoria mor"
-	# y la segunda o "categoria mor" o "categoria mor2"
-	#
-	# busca por categoria o por lexema (usar constantes MOR_UNIT_CATEGORIA o MOR_UNIT_LEXEMA)
-	# criteriaType puede ser un array o un string
-	# en caso de array tiene que ser del mismo tamaño que criteria
 	def findLinesByMorCriteria(self, criteria, criteriaType=MOR_UNIT_CATEGORIA):
+		"""Finds utterances that follow a criteria
+
+		Args:
+			criteria (list): Criteria. Example: [ ["part_of_speech-1"], [ [ "part_of_speech-1","part_of_speech-2 ] ] ]. 
+			An utterance will match if it contains two adjacent words: one with "part_of_speech-1" and the second one "part_of_speech-1" or "part_of_speech-2"
+			criteriaType (str or list, optional): Search for part-of-speech (categoria léxica) or lexeme. If using a list it must have the same number of elements as criteria. Defaults to MOR_UNIT_CATEGORIA.
+
+		Returns:
+			list: List of dict with line and matched criteria
+		"""
 		results = []
 
 		assert "mor" in self.USE_TIERS, "mor tier has to be selected for usage to use this function"
@@ -776,13 +969,30 @@ class ChaFile:
 					results.append(result)
 		return results
 
-	# funciona como findLinesByMorCriteria pero solo de una línea
 	def applyMorCriteriaInLine(self, line, criteria, criteriaType = MOR_UNIT_CATEGORIA):
+		"""Same as findLinesByMorCriteria but for one line
+
+		Args:
+			line (dict): Utterance
+			criteria (list): [description]
+			criteriaType (str or list, optional): [description]. Defaults to MOR_UNIT_CATEGORIA.
+
+		Returns:
+			list: List of indexes of the words matching the criteria
+		"""
 		return self._checkCriteria( line["mor"], criteria, criteriaType )
 
-	# se fija si el mor cumple el criterio (SOLO UNA VEZ)
-	# devuelve un array con los indices de las palabras que cumplen el criterio o vacio
 	def _checkCriteria(self, mor, criteria, criteriaType):
+		"""Internal use. Checks the MOR tier for the criteria (just once)
+
+		Args:
+			mor (list): MOR tier
+			criteria (list): Same as findLinesByMorCriteria
+			criteriaType (str or list): Same as findLinesByMorCriteria
+
+		Returns:
+			list: List of indexes of the words matching the criteria
+		"""
 		if mor == MISSING_VALUE:
 			return []
 
@@ -820,8 +1030,9 @@ class ChaFile:
 
 		return []
 
-	# para que se quede un solo DAD cuadno hay varios. usa los scores de arriba
 	def fixDAD(self):
+		"""Choose only one type of activity per utterance when many were coded
+		"""
 		for l in self.getLines():
 			if l[TIER_ACTIVITY] == MISSING_VALUE:
 				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
