@@ -12,7 +12,7 @@ Made by Leandro Garber from [CIIPME-CONICET](http://www.ciipme-conicet.gov.ar/wo
 * Utterances as a list of strings
 * MOR tier as objects
 * Easily add more custom tiers 
-* Count nouns
+* Count tokens and types of words, utterances, nouns, verbs and adjectives. Filter by child directed, child produced and overheard speech.
 * Count main verbs, either referring to physical or mental actions. Auxiliary verbs present in periphrastic verbs are excluded. (spanish only)
 
 ## Usage
@@ -24,18 +24,18 @@ Make a symlink (ln -s) to CLAN's bin directory called "clanBin".
 import sys
 sys.path.insert(0, '<path_to_cloned_repo>')
 
-import ChaFile
+from ChaFile import *
 ```
 
 ### Instance
 
 ```python
-cha = ChaFile.ChaFile(<path_to_cha_file>)
+cha = ChaFile(<path_to_cha_file>)
 ```
 Options
    
 ```python
-cha = ChaFile.ChaFile(<path_to_cha_file>, <list_of_ignored_speakers> = [ SPEAKER_SILENCE ], <list_of_tiers> = [ TIER_MOR ], CDS_ONLY = False )
+cha = ChaFile(<path_to_cha_file>, <list_of_ignored_speakers> = [ SPEAKER_SILENCE ], <list_of_tiers> = [ TIER_MOR ], CDS_ONLY = False )
 ```
 ### Get utterances
 ```python
