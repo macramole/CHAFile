@@ -6,7 +6,7 @@
 
 Class for parsing [CLAN's](http://dali.talkbank.org/clan/) CHA file.
 
-Made by Leandro Garber from [CIIPME-CONICET](http://www.ciipme-conicet.gov.ar/wordpress/)
+Made by Leandro Garber from [CIIPME-CONICET](http://www.ciipme-conicet.gov.ar/)
 
 ## Features
 * Utterances as a list of strings
@@ -16,8 +16,6 @@ Made by Leandro Garber from [CIIPME-CONICET](http://www.ciipme-conicet.gov.ar/wo
 * Count main verbs, either referring to physical or mental actions. Auxiliary verbs present in periphrastic verbs are excluded. (spanish only)
 
 ## Usage
-
-Make a symlink (ln -s) to CLAN's bin directory called "clanBin".
 
 ### Import
 ```python
@@ -35,7 +33,7 @@ cha = ChaFile(<path_to_cha_file>)
 Options
    
 ```python
-cha = ChaFile(<path_to_cha_file>, <list_of_ignored_speakers> = [ SPEAKER_SILENCE ], <list_of_tiers> = [ TIER_MOR ], CDS_ONLY = False )
+cha = ChaFile(<path_to_cha_file> )
 ```
 ### Get utterances
 ```python
@@ -48,7 +46,7 @@ Each line is an object with:
 * LINE_ADDRESSEE
 * LINE_BULLET : Timestamp
 * TIER_MOR : A list of objects with MOR data: MOR_UNIT_LEXEMA and MOR_UNIT_CATEGORIA
-* ... any other tier you selected when instanced
+* ... any other tier
 
 ### Cite
 
