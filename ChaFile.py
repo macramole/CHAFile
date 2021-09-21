@@ -949,7 +949,8 @@ class ChaFile:
 		def add(l):
 			nonlocal c
 
-			for v in l:
+			for index in l[what]:
+				v = l[TIER_MOR][index][MOR_UNIT_LEXEMA]
 				if v in c:
 					c[v] += 1
 				else:
@@ -957,20 +958,22 @@ class ChaFile:
 		
 		if addressee == ADDRESSEE_ALL:
 			for l in self.getLines():
-				add( l[what] )
+				add( l )
 		elif addressee == ADDRESSEE_CHILD_DIRECTED:
 			for l in self.getLines():
 				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
-					add( l[what] )
+					add( l )
 		elif addressee == ADDRESSEE_CHILD_PRODUCED:
 			for l in self.getLines():
 				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
-					add( l[what] )
+					add( l )
 		elif addressee == ADDRESSEE_OVER_HEARD:
 			for l in self.getLines():
 				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
-					add( l[what] )
+					add( l )
 		
+		# print(c)
+
 		if countType == COUNT_TYPE_TOKENS:
 			return sum(c.values())
 		else:
