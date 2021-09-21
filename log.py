@@ -13,12 +13,13 @@ class Log():
 
 	logPath = None
 
-	def __init__(self, logPath = None, settings = None):
+	def __init__(self, logPath = None, settings = None, printToTerminal = True):
 		"""
 			logPath : path to log file
 			settings: dict object with variables and values that represent current run
 		"""
 		self.logPath = logPath
+		self.printToTerminal = printToTerminal
 
 		if self.logPath:
 			if not os.path.exists(os.path.dirname(logPath)):
@@ -31,8 +32,12 @@ class Log():
 					for var, value in settings.items():
 						f.write( "{}: {}\n".format(var,value) )
 
+	def setVerbose(self, v):
+		self.printToTerminal = v
+
 	def log(self, what):
-		print(what)
+		if self.printToTerminal:
+			print(what)
 
 		if self.logPath:
 			with open(self.logPath, "a+") as f:

@@ -260,7 +260,7 @@ class ChaFile:
 
 	def __init__(self, chaFilePath,
 				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ], TIER_IGNORE = [],
-				 CDS_ONLY = False, VERBOSE = False, language = None):
+				 CDS_ONLY = False, verbose = True, language = None):
 		"""Constructor. Loads the CHA file and parse it
 
 		Args:
@@ -276,7 +276,8 @@ class ChaFile:
 		self.SPEAKER_IGNORE = SPEAKER_IGNORE
 		self.TIER_IGNORE = TIER_IGNORE
 		self.CDS_ONLY = CDS_ONLY
-		self.VERBOSE = VERBOSE
+
+		log.setVerbose(verbose)
 
 		self.filename = os.path.basename(chaFilePath)
 		self.filename = self.filename[0:self.filename.rfind(".")]
