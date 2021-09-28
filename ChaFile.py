@@ -58,6 +58,7 @@ MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
 MOR_REGEX = "([A-zÀ-ú:]*)\|([A-zÀ-ú]*)(.*)"
 MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
+MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
 MOR_UNIT_EXTRA = "extra"
 MOR_STOP_WORDS = [  ["imp", "da", "-2S&IMP~pro:clit|3S"], #lexema o [categoria, lexema] o [categoria, lexema, extra]
 					"okay",
@@ -848,7 +849,45 @@ class ChaFile:
 
 					morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
 		elif self.language == LANGUAGE_ENGLISH:
-			pass
+
+			# next_verb = [ "v", "inf", "ger", "part" ]
+
+			# going to
+			criterias = [
+				[["part|go"], ["to"], ["n", *CATEGORIAS_VERBOS]],
+				[["go"], [*CATEGORIAS_VERBOS]],
+				[["like"], ["to"], [*CATEGORIAS_VERBOS]],
+				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
+				[["do"], [*CATEGORIAS_VERBOS]],
+				[["do"],["not"],[*CATEGORIAS_VERBOS]],
+				# [["try"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
+				[["use"], ["to"], [*CATEGORIAS_VERBOS]],
+				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
+			]
+
+			for criteria in criterias:
+				criteriaType = [ MOR_UNIT_LEXEMA if "|" not in c else MOR_UNIT_CATEGORIA_LEXEMA for c in criteria ]
+				del criteriaType[-1]
+				criteriaType.append(MOR_UNIT_CATEGORIA)
+
+				morIndexes = self._checkCriteria( list(lineaMor.values()), criteria, criteriaType )
+				# existe el patron
+				while len(morIndexes) > 0:
+					#agarro la última palabra y la agrego como verbo
+					trueIndex = list(lineaMor.keys())[ morIndexes[-1] ]
+					verbos.append( trueIndex )
+
+					trueIndexesToDelete = []
+					for morIndex in morIndexes:
+						trueIndexesToDelete.append( list(lineaMor.keys())[ morIndex ] )
+					for i in trueIndexesToDelete:
+						del lineaMor[ i ]
+
+					criteriaType = [ MOR_UNIT_LEXEMA if "|" not in c else MOR_UNIT_CATEGORIA_LEXEMA for c in criteria ]
+					del criteriaType[-1]
+					criteriaType.append(MOR_UNIT_CATEGORIA)
+					morIndexes = self._checkCriteria( list(lineaMor.values()), criteria, criteriaType )
+
 
 		return lineaMor
 
@@ -986,7 +1025,7 @@ class ChaFile:
 		Args:
 			criteria (list): Criteria. Example: [ ["part_of_speech-1"], [ [ "part_of_speech-1","part_of_speech-2 ] ] ]. 
 			An utterance will match if it contains two adjacent words: one with "part_of_speech-1" and the second one "part_of_speech-1" or "part_of_speech-2"
-			criteriaType (str or list, optional): Search for part-of-speech (categoria léxica) or lexeme. If using a list it must have the same number of elements as criteria. Defaults to MOR_UNIT_CATEGORIA.
+			criteriaType (str or list, optional): Search for part-of-speech (categoria léxica) or lexeme. If using a list it must have the same number of elements as criteria. Defaults to MOR_UNIT_CATEGORIA. MOR_UNIT_CATEGORIA_LEXEMA matches "<part_of_speech>|<lexeme>"
 
 		Returns:
 			list: List of dict with line and matched criteria
@@ -1051,11 +1090,21 @@ class ChaFile:
 			found = False
 			for c in criteria[currentCriteria]:
 				isAMatch = False
-				if isinstance(criteriaType, str): #esto me parece que no lo estamos permitiendo desde el assert
-					isAMatch = ( morUnit[criteriaType] == c )
-				elif isinstance(criteriaType, list):
-					isAMatch = ( morUnit[ criteriaType[currentCriteria] ] == c )
+				currentCriteriaType = criteriaType
 
+				if isinstance(criteriaType, list):
+					currentCriteriaType = criteriaType[currentCriteria]
+				
+				if currentCriteriaType == MOR_UNIT_CATEGORIA_LEXEMA:
+					if not "|" in c:
+						raise "Criteria type is MOR_UNIT_CATEGORIA_LEXEMA but criteria doesn't include | symbol"
+					
+					arrCriteria = c.split("|")
+
+					isAMatch = morUnit[ MOR_UNIT_LEXEMA ] == arrCriteria[1] and morUnit[ MOR_UNIT_CATEGORIA ] == arrCriteria[0]
+				else:
+					isAMatch = morUnit[ currentCriteriaType ] == c
+					
 				if isAMatch:
 					matchedCriteria.append(morUnitIndex)
 					currentCriteria += 1
