@@ -8,7 +8,6 @@ Created on Mon Oct 29 14:59:04 2018
 """
 
 import os
-from xml.dom import minidom
 from subprocess import getstatusoutput
 import re
 from log import Log
@@ -56,7 +55,7 @@ LANGUAGE_ENGLISH = "eng"
 ERROR_NO_MOR_FOUND = 1
 
 MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
-MOR_REGEX = "([A-zÀ-ú:]*)\|([A-zÀ-ú]*)(.*)"
+MOR_REGEX = r"([A-zÀ-ú:]*)\|([A-zÀ-ú]*)(.*)"
 MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
 MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
@@ -261,14 +260,13 @@ class ChaFile:
 		return dads
 
 	def __init__(self, chaFilePath,
-				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ], TIER_IGNORE = [],
+				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ],
 				 CDS_ONLY = False, verbose = True, language = None):
 		"""Constructor. Loads the CHA file and parse it
 
 		Args:
 			chaFilePath (string): Path to the CHA file
 			SPEAKER_IGNORE (list, optional): Utterances from these speakers won't be parsed. Defaults to [ SPEAKER_SILENCE ].
-			TIER_IGNORE (list, optional): Tiers to exclude when parsing the CHA file. Defaults to [].
 			CDS_ONLY (bool, optional): Only child directed utterances will be parsed. Defaults to False.
 			VERBOSE (bool, optional): Extra information will be printed when processing. Defaults to False.
 			language (string, optional): Use one of the LANGUAGE constants or None for parsing it from the CHA file. Defaults to None.
@@ -276,7 +274,6 @@ class ChaFile:
 
 		self.chaFilePath = chaFilePath
 		self.SPEAKER_IGNORE = SPEAKER_IGNORE
-		self.TIER_IGNORE = TIER_IGNORE
 		self.CDS_ONLY = CDS_ONLY
 
 		log.setVerbose(verbose)
@@ -495,42 +492,6 @@ class ChaFile:
 			for l in self.getLines():
 				if TIER_MOR not in l:
 					l[TIER_MOR] = []
-			####
-
-
-			# line = {
-			# 	LINE_UTTERANCE : strLine,
-			# 	LINE_NUMBER : int(lineNumber),
-			# 	LINE_SPEAKER : speaker,
-			# 	LINE_ADDRESSEE : None
-			# }
-
-			# if BULLET_TAG in strLine:
-			# 	bullet = strLine[ strLine.find(BULLET_TAG): ].replace(BULLET_TAG,"").split("_")
-			# 	line[ LINE_BULLET ] = [ int(bullet[-2]), int(bullet[-1]) ]
-			# 	line[ LINE_UTTERANCE ] = strLine[ :strLine.find(BULLET_TAG)].strip()
-			# 	self.noBullets = False
-
-			# for tier in self.USE_TIERS:
-			# 	line[tier] = MISSING_VALUE
-
-			# tiers = []
-			# for i in range(INDEX_CONTENIDO+1, len(rowCells)):
-			# 	tierContent = rowCells[i].firstChild.firstChild.data
-			# 	tiers.append( tierContent )
-
-			# for tier in tiers:
-			# 	tierName = tier[1:4]
-			# 	line[tierName] = tier[5:].strip()
-
-			# 	if hasattr(self, "_parse%s" % tierName.capitalize() ):
-			# 		tierProcessFunction = getattr(self, "_parse%s" % tierName.capitalize() )
-			# 		line[tierName] = tierProcessFunction( line[tierName], line[LINE_NUMBER] )
-
-			
-
-			# if not (self.CDS_ONLY and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH	]):
-			# 	self.lines.append(line)
 
 	def _setAddressee(self, line):
 		"""Internal use. Set normalized addressee 
@@ -671,8 +632,7 @@ class ChaFile:
 		assert self.morFound, "MOR tier not found"
 		
 		if not self.processedVerbs:
-			#in english, sometimes MOR mark as a noun a word that is a verb
-			log.log("Warning: Verbs needs to be processed before nouns. Processing verbs.")
+			#in english, sometimes MOR mark as noun a word that is a verb
 			self.populateVerbs()
 
 		nouns = []
@@ -680,7 +640,7 @@ class ChaFile:
 		if linea[TIER_MOR] != MISSING_VALUE: 	
 			for i, morUnit in enumerate(linea[TIER_MOR]):
 				if morUnit[MOR_UNIT_CATEGORIA] in CATEGORIAS_SUSTANTIVOS:
-					if not i in linea[LINE_VERBS]: #in english, sometimes MOR mark as a noun a word that is a verb
+					if not i in linea[LINE_VERBS]: #in english, sometimes MOR mark as noun a word that is a verb
 						nouns.append(i)
 		
 		return nouns
@@ -693,8 +653,7 @@ class ChaFile:
 		if self.processedNouns: return
 		
 		if not self.processedVerbs:
-			#in english, sometimes MOR mark as a noun a word that is a verb
-			log.log("Warning: Verbs needs to be processed before nouns. Processing verbs.")
+			#in english, sometimes MOR mark as noun a word that is a verb
 			self.populateVerbs()
 
 		for linea in self.getLines():
@@ -792,12 +751,15 @@ class ChaFile:
 				[["pode"]],
 				[["habe"]],
 				[["esta"]],
-				#[["deja"],["de"]],    #estos que comenté son los que cambiamos cuando hicimos aclew completo
 				[["debe"]],
-				#[["acaba"],["de"]],
-				#[["termina"],["de"]],
 				[["habe"],["que"]],
 				[["esta"],["por"]],
+				
+				#[["deja"],["de"]],    #estos que comenté son los que cambiamos cuando hicimos aclew completo
+				
+				#[["acaba"],["de"]],
+				#[["termina"],["de"]],
+
 				#[["empeza"],["a"]],
 				#[["empeza"],["por"]],
 
@@ -864,8 +826,6 @@ class ChaFile:
 
 					morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
 		elif self.language == LANGUAGE_ENGLISH:		
-			# Chequear que el noun del primer criteria no lo tome como noun
-
 			criterias = [
 				[["part|go"], ["to"], ["n", *CATEGORIAS_VERBOS]],
 				[["part|go"], ["n", *CATEGORIAS_VERBOS]], #gonna
