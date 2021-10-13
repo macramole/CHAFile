@@ -22,6 +22,7 @@ LINE_BULLET = "bullet"
 LINE_NOUNS = "sustantivos"
 LINE_ADJECTIVES = "adjetivos"
 LINE_VERBS = "verbos"
+LINE_LIGHT_VERBS = "light-verbs"
 #################################
 
 # Speaker constants. line[LINE_SPEAKER] will be one of these
@@ -127,7 +128,7 @@ ADDRESSEE_CORRESPOND = {
 	ADDRESSEE_XDS_PET : SPEAKER_PET
 }
 
-CATEGORIAS_VERBOS = ["v","ger","part","aux","imp","inf","cop"] #habia sacado "cop" en variation sets y saque "co" porque toma cualquier cosa
+CATEGORIAS_VERBOS = ["v","ger","part","imp","inf","cop", "aux"] #"cop" and "aux" are removed by default when counting verbs
 CATEGORIAS_ADJETIVOS = ["adj"]
 CATEGORIAS_SUSTANTIVOS = ["n"]
 
@@ -643,8 +644,7 @@ class ChaFile:
 		Returns:
 			dict: Addressees and number of nouns
 		"""
-		if not self.processedNouns:
-			self.populateNouns()
+		self.populateNouns()
 
 		addressees = {}
 
@@ -670,12 +670,18 @@ class ChaFile:
 		"""
 		assert self.morFound, "MOR tier not found"
 		
+		if not self.processedVerbs:
+			#in english, sometimes MOR mark as a noun a word that is a verb
+			log.log("Warning: Verbs needs to be processed before nouns. Processing verbs.")
+			self.populateVerbs()
+
 		nouns = []
 
 		if linea[TIER_MOR] != MISSING_VALUE: 	
 			for i, morUnit in enumerate(linea[TIER_MOR]):
 				if morUnit[MOR_UNIT_CATEGORIA] in CATEGORIAS_SUSTANTIVOS:
-					nouns.append(i)
+					if not i in linea[LINE_VERBS]: #in english, sometimes MOR mark as a noun a word that is a verb
+						nouns.append(i)
 		
 		return nouns
 
@@ -683,7 +689,14 @@ class ChaFile:
 		"""Populate LINE_NOUNS for every line with the indexes of the MOR line where nouns are found
 		"""
 		assert self.morFound, "MOR tier not found"
+
+		if self.processedNouns: return
 		
+		if not self.processedVerbs:
+			#in english, sometimes MOR mark as a noun a word that is a verb
+			log.log("Warning: Verbs needs to be processed before nouns. Processing verbs.")
+			self.populateVerbs()
+
 		for linea in self.getLines():
 			linea[LINE_NOUNS] = self.getNounsInLine(linea)
 		
@@ -734,6 +747,8 @@ class ChaFile:
 		"""
 		assert self.morFound, "MOR tier not found"
 		
+		if self.processedAdjectives: return
+
 		for linea in self.getLines():
 			linea[LINE_ADJECTIVES] = self.getAdjectivesInLine(linea)
 		
@@ -757,7 +772,7 @@ class ChaFile:
 		"""Internal use. Language dependent. Process light verbs to be skipped when counting verbs
 
 		Args:
-			lineaMor (dict): MOR tier for an utterance
+			lineaMor (dict): MOR tier for an utterance. Note that it is a dict, not a list
 			verbos (list): List of verbs
 
 		Returns:
@@ -848,25 +863,25 @@ class ChaFile:
 						del lineaMor[ i ]
 
 					morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
-		elif self.language == LANGUAGE_ENGLISH:
+		elif self.language == LANGUAGE_ENGLISH:		
+			# Chequear que el noun del primer criteria no lo tome como noun
 
-			# next_verb = [ "v", "inf", "ger", "part" ]
-
-			# going to
 			criterias = [
 				[["part|go"], ["to"], ["n", *CATEGORIAS_VERBOS]],
+				[["part|go"], ["n", *CATEGORIAS_VERBOS]], #gonna
 				[["go"], [*CATEGORIAS_VERBOS]],
 				[["like"], ["to"], [*CATEGORIAS_VERBOS]],
-				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 				[["do"], [*CATEGORIAS_VERBOS]],
 				[["do"],["not"],[*CATEGORIAS_VERBOS]],
-				# [["try"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 				[["use"], ["to"], [*CATEGORIAS_VERBOS]],
+
+				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
+				# [["try"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 			]
 
 			for criteria in criterias:
-				criteriaType = [ MOR_UNIT_LEXEMA if "|" not in c else MOR_UNIT_CATEGORIA_LEXEMA for c in criteria ]
+				criteriaType = [ MOR_UNIT_LEXEMA if "|" not in c[0] else MOR_UNIT_CATEGORIA_LEXEMA for c in criteria ]
 				del criteriaType[-1]
 				criteriaType.append(MOR_UNIT_CATEGORIA)
 
@@ -887,8 +902,20 @@ class ChaFile:
 					del criteriaType[-1]
 					criteriaType.append(MOR_UNIT_CATEGORIA)
 					morIndexes = self._checkCriteria( list(lineaMor.values()), criteria, criteriaType )
+			
+			# Don't count LET'S as a verb
+			stopWords = [
+				{MOR_UNIT_CATEGORIA: 'v', MOR_UNIT_LEXEMA: 'let', MOR_UNIT_EXTRA: '~pro:obj|us'}
+			]
 
-
+			trueIndexesToDelete = []
+			for i in lineaMor:
+				morUnit = lineaMor[i]
+				if morUnit in stopWords:
+					trueIndexesToDelete.append(i)
+			for i in trueIndexesToDelete:
+				del lineaMor[ i ]
+			
 		return lineaMor
 
 	def getVerbsInLine(self, linea, countCopAux = False, processLightVerbs = True ):
@@ -905,12 +932,15 @@ class ChaFile:
 		verbos = []
 		# no se borra nada del MOR original
 		lineaMor={}
-		for i, m in enumerate(linea["mor"]):
+		for i, m in enumerate(linea[TIER_MOR]):
 			lineaMor[i] = m
 
 		if processLightVerbs:
 			assert self.language != None, "language not set"
 			lineaMor = self._processLightVerbs(lineaMor, verbos)
+
+		if len(lineaMor) != len(linea[TIER_MOR]):
+			linea[LINE_LIGHT_VERBS] = True
 
 		#verbos normales
 		verbosIndividualesAContar = CATEGORIAS_VERBOS.copy()
@@ -918,6 +948,9 @@ class ChaFile:
 		if not countCopAux:
 			verbosIndividualesAContar.remove("cop")
 			verbosIndividualesAContar.remove("aux")
+		
+		if self.language == LANGUAGE_ENGLISH:
+			verbosIndividualesAContar.remove("inf") #esto saca el to
 
 		morIndexes = self._checkCriteria( list(lineaMor.values()), [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
 		while len(morIndexes) > 0:
@@ -933,6 +966,7 @@ class ChaFile:
 			morIndexes = self._checkCriteria( list(lineaMor.values()), [ verbosIndividualesAContar ], MOR_UNIT_CATEGORIA )
 
 		linea[LINE_VERBS] = verbos
+		linea[LINE_VERBS].sort()
 		
 		return verbos
 
@@ -975,13 +1009,13 @@ class ChaFile:
 		"""
 
 		if what not in [ LINE_VERBS, LINE_NOUNS, LINE_ADJECTIVES ]:
-			raise "what should be LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES"
+			raise "'what' argument should be LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES"
 
-		if what == LINE_VERBS and not self.processedVerbs:
+		if what == LINE_VERBS:
 			self.populateVerbs(countCopAux=countCopAux, processLightVerbs=processLightVerbs)
-		elif what == LINE_NOUNS and not self.processedNouns:
+		elif what == LINE_NOUNS:
 			self.populateNouns()
-		elif what == LINE_ADJECTIVES and not self.processedAdjectives:
+		elif what == LINE_ADJECTIVES:
 			self.populateAdjectives()
 		
 		c = {}
