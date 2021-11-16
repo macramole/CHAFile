@@ -260,21 +260,23 @@ class ChaFile:
 		return dads
 
 	def __init__(self, chaFilePath,
-				 SPEAKER_IGNORE = [ SPEAKER_SILENCE ],
-				 CDS_ONLY = False, verbose = True, language = None):
+				 ignoreSpeakers = [ SPEAKER_SILENCE ], onlyCDS = False, includeLines = [],
+				 verbose = True, language = None):
 		"""Constructor. Loads the CHA file and parse it
 
 		Args:
 			chaFilePath (string): Path to the CHA file
-			SPEAKER_IGNORE (list, optional): Utterances from these speakers won't be parsed. Defaults to [ SPEAKER_SILENCE ].
-			CDS_ONLY (bool, optional): Only child directed utterances will be parsed. Defaults to False.
-			VERBOSE (bool, optional): Extra information will be printed when processing. Defaults to False.
+			ignoreSpeakers (list, optional): Utterances from these speakers won't be parsed. Defaults to [ SPEAKER_SILENCE ].
+			onlyCDS (bool, optional): Only child directed utterances will be parsed. Defaults to False.
+			includeLines (list, optional): Only these line numbers will be parsed. Defaults to [] which means all lines.
+			verbose (bool, optional): Extra information will be printed when processing. Defaults to False.
 			language (string, optional): Use one of the LANGUAGE constants or None for parsing it from the CHA file. Defaults to None.
 		"""
 
 		self.chaFilePath = chaFilePath
-		self.SPEAKER_IGNORE = SPEAKER_IGNORE
-		self.CDS_ONLY = CDS_ONLY
+		self.ignoreSpeakers = ignoreSpeakers
+		self.onlyCDS = onlyCDS
+		self.includeLines = includeLines
 
 		log.setVerbose(verbose)
 
@@ -436,7 +438,7 @@ class ChaFile:
 
 				if m.group("tier")[0] == "*": #is speaker
 					speaker = tier[1:]
-					if not speaker in self.SPEAKER_IGNORE:
+					if not speaker in self.ignoreSpeakers:
 						if not speaker in self.speakers:
 							self.speakers.append(speaker)
 
@@ -481,9 +483,10 @@ class ChaFile:
 			if not skipLine:
 				self._setAddressee(line)
 
-				if not (self.CDS_ONLY and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH]):
-					if not speaker in self.SPEAKER_IGNORE:
-						self.lines.append(line)
+				if not (self.onlyCDS and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH]):
+					if not speaker in self.ignoreSpeakers:
+						if len(self.includeLines) == 0 or line[ LINE_NUMBER ] in self.includeLines:
+							self.lines.append(line)
 			
 			lineNumber += r.count("\n")
 
