@@ -830,14 +830,16 @@ class ChaFile:
 				[["part|go"], ["to"], ["n", *CATEGORIAS_VERBOS]],
 				[["part|go"], ["n", *CATEGORIAS_VERBOS]], #gonna
 				[["go"], [*CATEGORIAS_VERBOS]],
-				[["like"], ["to"], [*CATEGORIAS_VERBOS]],
+				[["have"], ["to"], [*CATEGORIAS_VERBOS]],
 				[["do"], [*CATEGORIAS_VERBOS]],
 				[["do"],["not"],[*CATEGORIAS_VERBOS]],
 				[["use"], ["to"], [*CATEGORIAS_VERBOS]],
 
+
+
+				# [["like"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 				# [["try"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
-				# [["want"], ["to"], [*CATEGORIAS_VERBOS]], # se decidió no agregarla
 			]
 
 			for criteria in criterias:
