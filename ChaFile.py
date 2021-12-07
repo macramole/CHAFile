@@ -60,6 +60,7 @@ MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
 MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
 MOR_UNIT_EXTRA = "extra"
+MOR_UNIT_AMBIGUOUS = "ambiguo"
 MOR_STOP_WORDS = [  ["imp", "da", "-2S&IMP~pro:clit|3S"], #lexema o [categoria, lexema] o [categoria, lexema, extra]
 					"okay",
 					# "like",
@@ -165,12 +166,21 @@ class ChaFile:
 		arrMorData = []
 
 		for morUnit in morContent:
+			lstMorUnit = []
+
 			if "^" in morUnit:
 				if lineNumber not in self.morAmbiguousLines:
 					self.morAmbiguousLines.append(lineNumber)
+				
+				lstMorUnit = morUnit.split("^")
+				morUnit = lstMorUnit[0]
+				lstMorUnit = lstMorUnit[1:]
 
 			parsedMorUnit = self._parseMorUnit(morUnit)
 			if parsedMorUnit != {}:
+				if len(lstMorUnit) > 0 :
+					parsedMorUnit[MOR_UNIT_AMBIGUOUS] = "^".join(lstMorUnit)
+
 				arrMorData.append( parsedMorUnit )
 
 		return arrMorData
