@@ -179,7 +179,7 @@ class ChaFile:
 			parsedMorUnit = self._parseMorUnit(morUnit)
 			if parsedMorUnit != {}:
 				if len(lstMorUnit) > 0 :
-					parsedMorUnit[MOR_UNIT_AMBIGUOUS] = "^".join(lstMorUnit)
+					parsedMorUnit[MOR_UNIT_AMBIGUOUS] = lstMorUnit
 
 				arrMorData.append( parsedMorUnit )
 
