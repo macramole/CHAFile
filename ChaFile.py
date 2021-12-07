@@ -139,18 +139,6 @@ log = Log()
 
 class ChaFile:
 
-	noBullets = True
-	lines = []
-	speakers = []
-	language = None
-	morAmbiguousLines = []
-
-	processedVerbs = False
-	processedNouns = False
-	processedAdjectives = False
-
-	morFound = False #true if MOR was found in at least one line
-
 	def _parseMor(self, morContent, lineNumber):
 		"""Internal use. Parse MOR tier
 
@@ -282,6 +270,18 @@ class ChaFile:
 			verbose (bool, optional): Extra information will be printed when processing. Defaults to False.
 			language (string, optional): Use one of the LANGUAGE constants or None for parsing it from the CHA file. Defaults to None.
 		"""
+
+		self.noBullets = True
+		self.lines = []
+		self.speakers = []
+		self.language = None
+		self.morAmbiguousLines = []
+
+		self.processedVerbs = False
+		self.processedNouns = False
+		self.processedAdjectives = False
+
+		self.morFound = False #true if MOR was found in at least one line
 
 		self.chaFilePath = chaFilePath
 		self.ignoreSpeakers = ignoreSpeakers
