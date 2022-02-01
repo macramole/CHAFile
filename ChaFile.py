@@ -129,7 +129,7 @@ ADDRESSEE_CORRESPOND = {
 
 CATEGORIAS_VERBOS = ["v","ger","part","imp","inf","cop", "aux"] #"cop" and "aux" are removed by default when counting verbs
 CATEGORIAS_ADJETIVOS = ["adj"]
-CATEGORIAS_SUSTANTIVOS = ["n"]
+CATEGORIAS_SUSTANTIVOS = ["n", "n:gerund"] #n:gerund was found in english and want to count it as a noun
 
 MISSING_VALUE = "?"
 ###############################################
