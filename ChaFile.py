@@ -60,6 +60,7 @@ MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
 MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
 MOR_UNIT_EXTRA = "extra"
+MOR_UNIT_AMBIGUOUS = "ambiguo"
 MOR_STOP_WORDS = [  ["imp", "da", "-2S&IMP~pro:clit|3S"], #lexema o [categoria, lexema] o [categoria, lexema, extra]
 					"okay",
 					# "like",
@@ -138,18 +139,6 @@ log = Log()
 
 class ChaFile:
 
-	noBullets = True
-	lines = []
-	speakers = []
-	language = None
-	morAmbiguousLines = []
-
-	processedVerbs = False
-	processedNouns = False
-	processedAdjectives = False
-
-	morFound = False #true if MOR was found in at least one line
-
 	def _parseMor(self, morContent, lineNumber):
 		"""Internal use. Parse MOR tier
 
@@ -165,12 +154,21 @@ class ChaFile:
 		arrMorData = []
 
 		for morUnit in morContent:
+			lstMorUnit = []
+
 			if "^" in morUnit:
 				if lineNumber not in self.morAmbiguousLines:
 					self.morAmbiguousLines.append(lineNumber)
+				
+				lstMorUnit = morUnit.split("^")
+				morUnit = lstMorUnit[0]
+				lstMorUnit = lstMorUnit[1:]
 
 			parsedMorUnit = self._parseMorUnit(morUnit)
 			if parsedMorUnit != {}:
+				if len(lstMorUnit) > 0 :
+					parsedMorUnit[MOR_UNIT_AMBIGUOUS] = lstMorUnit
+
 				arrMorData.append( parsedMorUnit )
 
 		return arrMorData
@@ -272,6 +270,18 @@ class ChaFile:
 			verbose (bool, optional): Extra information will be printed when processing. Defaults to False.
 			language (string, optional): Use one of the LANGUAGE constants or None for parsing it from the CHA file. Defaults to None.
 		"""
+
+		self.noBullets = True
+		self.lines = []
+		self.speakers = []
+		self.language = None
+		self.morAmbiguousLines = []
+
+		self.processedVerbs = False
+		self.processedNouns = False
+		self.processedAdjectives = False
+
+		self.morFound = False #true if MOR was found in at least one line
 
 		self.chaFilePath = chaFilePath
 		self.ignoreSpeakers = ignoreSpeakers
