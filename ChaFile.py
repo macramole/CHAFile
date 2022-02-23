@@ -22,6 +22,7 @@ LINE_NOUNS = "sustantivos"
 LINE_ADJECTIVES = "adjetivos"
 LINE_VERBS = "verbos"
 LINE_LIGHT_VERBS = "light-verbs"
+LINE_MOR_TO_WORDS = "mor-to-words"
 #################################
 
 # Speaker constants. line[LINE_SPEAKER] will be one of these
@@ -55,7 +56,7 @@ LANGUAGE_ENGLISH = "eng"
 ERROR_NO_MOR_FOUND = 1
 
 MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
-MOR_REGEX = r"([A-zÀ-ú:]*)\|([A-zÀ-ú]*)(.*)"
+MOR_REGEX = r"([A-zÀ-ú:#]*)\|([A-zÀ-ú]*)(.*)"
 MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
 MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
@@ -65,6 +66,11 @@ MOR_STOP_WORDS = [  ["imp", "da", "-2S&IMP~pro:clit|3S"], #lexema o [categoria, 
 					"okay",
 					# "like",
 					"right"
+]
+STOP_WORDS = [
+	"dale",
+	"okay",
+	"right"
 ]
 MOR_REPLACEMENTS = { #reemplazo de palabras que está agarrando mal el MOR, ej: n|papi debería ser n|papá
 	"papi" : "papá",
@@ -548,6 +554,48 @@ class ChaFile:
 		#
 		# return addressee, strLine
 
+	def processMorToWords(self,line):
+		utt = line[LINE_UTTERANCE]
+
+		# deletes all [=! some_comment]
+		utt = re.sub(r"\[\=\!\s\S*\]", "", utt)
+
+		# deletes all <slang_word> [: some_replacing_word] and keeps some_replacing_word
+		replacingRegEx = r"\<\S*\> \[\:\s([\s\w]*)\]"
+		prog = re.compile(replacingRegEx)
+		for m in prog.finditer(utt):
+			utt = re.sub(replacingRegEx, m.group(1), utt, count=1)
+		
+		utt = utt.split(" ")
+
+		for stopWord in STOP_WORDS:
+			while stopWord in utt:
+				i = utt.index(stopWord)
+				del utt[i]
+
+		# "xxx" means transcriptor couldn't understand. This word won't be parsed by MOR
+		while "xxx" in utt:
+			i = utt.index("xxx")
+			del utt[i]
+
+		# "[/]" means repetition. This and next word won't be parsed by MOR
+		while "[/]" in utt:
+			i = utt.index("[/]")
+			if i-1 >= 0:
+				del utt[i-1:i+1]
+
+		utt = list(filter( lambda w: len(w) and w[0].isalpha(), utt ))
+
+		# Acá falta solucionar el tema de las comas !!
+
+		line[LINE_MOR_TO_WORDS] = utt
+
+	def morUnitToWord(self, line, morUnitIndex):
+		if not LINE_MOR_TO_WORDS in line:
+			self.processMorToWords(line)
+		
+		return line[LINE_MOR_TO_WORDS][morUnitIndex]
+
 	def countUtterances(self):
 		"""Returns number of utterances
 
@@ -711,11 +759,17 @@ class ChaFile:
 			for i, morUnit in enumerate(linea[TIER_MOR]):
 				if morUnit[MOR_UNIT_CATEGORIA] in CATEGORIAS_ADJETIVOS:
 					adjetivos.append(i)
-		
+				elif (	self.language == LANGUAGE_SPANISH and i>0 and 
+						morUnit[MOR_UNIT_CATEGORIA] == "part" and
+						linea[TIER_MOR][i-1][MOR_UNIT_CATEGORIA] == "cop"):
+					adjetivos.append(i)
+
+				# en español: si es part y el anterior es cop y no termina en [ando, endo] es adjetivo
+		 
 		return adjetivos
 	
 	def populateAdjectives(self):
-		"""Populate LINE_ADJECTIVES of every line with the indexes of the MOR tier where adjectives are found
+		"""Populate LINE_ADJECTIVES from each line with the indexes of the MOR tier where adjectives are found
 		"""
 		assert self.morFound, "MOR tier not found"
 		
@@ -828,6 +882,9 @@ class ChaFile:
 			for criterio in criteriosCategoria:
 				morIndexes = self._checkCriteria( list(lineaMor.values()), criterio, MOR_UNIT_CATEGORIA )
 				while len(morIndexes) > 0:
+					# aca habría que mirar si el segundo (trueIndex) termina en ando o endo, en tal caso
+					# se hace como se está haciendo, en caso contrario habría que retirarlo, es adjetivo,
+					# entonces también habría que tocar la parte de adjetivos 
 					trueIndex = list(lineaMor.keys())[ morIndexes[1] ]
 					verbos.append( trueIndex )
 
