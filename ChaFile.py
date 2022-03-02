@@ -56,7 +56,6 @@ LANGUAGE_ENGLISH = "eng"
 ERROR_NO_MOR_FOUND = 1
 
 MOR_ERROR_NO_MOR_FOUND = "TIER \"%MOR\", ASSOCIATED WITH A SELECTED SPEAKER"
-MOR_REGEX = r"([A-zÀ-ú:#]*)\|([A-zÀ-ú]*)(.*)"
 MOR_UNIT_CATEGORIA = "categoria"
 MOR_UNIT_LEXEMA = "lexema"
 MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
@@ -368,11 +367,34 @@ class ChaFile:
 		"""
 		return self.language
 
-	def processMorToWords(self,line):
+	def processMorToWords(self):
+		"""Adds a new field to each line containing a clean version
+		of the utterance that maps one to one with MOR tier
+		"""
+		for l in self.getLines():
+			self.processMorToWordsInLine(l)
+
+	def processMorToWordsInLine(self,line):
+		"""Adds a new field to line containing a clean version
+		of the utterance that maps one to one with MOR tier
+
+		Args:
+			line (dict): The line to process
+		"""
 		utt = line[LINE_UTTERANCE]
 
-		# deletes all [=! some_comment]
-		utt = re.sub(r"\[\=\!\s\S*\]", "", utt)
+		# remove [+ TARGET]		
+		utt = re.sub(r"\[\+.*\]", "", utt)
+
+		# deletes all [=! some_comment] and keeps whats inside <>
+		# i.e <you get your dog> [=! imitates] => you get your dog
+		replacingRegEx = r"(?:<(.*)\>|(\S*)) \[=!\s[\s\w]*\]"
+		prog = re.compile(replacingRegEx)
+		for m in prog.finditer(utt):
+			groupNum = 1
+			if m.group(2):
+				groupNum = 2
+			utt = re.sub(replacingRegEx, m.group(groupNum), utt, count=1)
 
 		# deletes all <slang_word> [: some_replacing_word] and keeps some_replacing_word
 		replacingRegEx = r"\<\S*\> \[\:\s([\s\w]*)\]"
@@ -382,31 +404,51 @@ class ChaFile:
 		
 		utt = utt.split(" ")
 
-		for stopWord in STOP_WORDS:
-			while stopWord in utt:
-				i = utt.index(stopWord)
-				del utt[i]
-
-		# "xxx" means transcriptor couldn't understand. This word won't be parsed by MOR
-		while "xxx" in utt:
-			i = utt.index("xxx")
-			del utt[i]
-
 		# "[/]" means repetition. This and next word won't be parsed by MOR
 		while "[/]" in utt:
 			i = utt.index("[/]")
 			if i-1 >= 0:
 				del utt[i-1:i+1]
 
-		utt = list(filter( lambda w: len(w) and w[0].isalpha(), utt ))
+		for stopWord in STOP_WORDS:
+			while stopWord in utt:
+				i = utt.index(stopWord)
+				del utt[i]
+		
+		# Only keep words that start with a letter or a number different to 0
+		utt = list(filter( lambda w: len(w) and (w[0].isalpha() or (w[0].isdigit() and w[0] != "0" )) , utt ))
 
-		# Acá falta solucionar el tema de las comas !!
+		# Commas are parsed by MOR
+		uttWithCommas = []
+		for w in utt:
+			if "," in w and len(w) > 0:
+				uttWithCommas.append( w[:w.find(",")] )
+				uttWithCommas.append(",")
+			else:
+				uttWithCommas.append(w)
+		utt = uttWithCommas
+		
+		# "xxx" means transcriptor couldn't understand. This word won't be parsed by MOR
+		while "xxx" in utt:
+			i = utt.index("xxx")
+			del utt[i]
 
 		line[LINE_MOR_TO_WORDS] = utt
 
+		if len(line[LINE_MOR_TO_WORDS]) != len(line[TIER_MOR]):
+				print(f"MorToWord failed for line [{line[LINE_NUMBER]}]")
 	def morUnitToWord(self, line, morUnitIndex):
+		"""Returns the word from the utterance related to the MOR unit
+
+		Args:
+			line (dict): The line to process
+			morUnitIndex (int): The index of the mor unit
+
+		Returns:
+			str: The word from the utterance related
+		"""
 		if not LINE_MOR_TO_WORDS in line:
-			self.processMorToWords(line)
+			self.processMorToWordsInLine(line)
 		
 		return line[LINE_MOR_TO_WORDS][morUnitIndex]
 
@@ -1047,6 +1089,8 @@ class ChaFile:
 		if morUnit in MOR_STOP_WORDS:
 			return {}
 		
+		MOR_REGEX = r"([A-zÀ-ú:#\?]*)\|([A-zÀ-ú]*)(.*)"
+
 		matches = re.match(MOR_REGEX, morUnit)
 		if matches != None: #no agarra ni . ! ? 
 			if len(matches.groups()) == 3:
