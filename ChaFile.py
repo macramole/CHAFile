@@ -84,32 +84,6 @@ BULLET_TAG = "\x15"
 # TIER constants
 TIER_MOR = "mor"
 TIER_XDS = "xds"
-TIER_PRAGMATIC_FUNCTION = "pra"
-TIER_ACTIVITY = "dad"
-TIER_ACTIVITY_SCORES = {
-	"IND" :-1,
-	"CAA" : 0, # Conversaciones entre adultos, Adult conversations
-	"CAB" : 1, # Conversaci, Adult-Child Conversation
-	"JUO" : 4, #
-	"JUF" : 4, #
-	"JUE" : 6,
-	"LEC" : 6,
-	"COM" : 2, # Household chores
-	"HIG" : 5,
-	"DOM" : 5,
-	"CAL" : 5,
-	"MTV" : 3
-}
-TIER_PRAGMATIC_FUNCTION_FUNCTIONS = [
-	"PVN",
-	"DAN",
-	"DEN",
-	"PVV",
-	"DAV",
-	"DAA",
-	"DEV",
-	"IND",
-]
 ###############################
 
 ## Internal use only. Use SPEAKER_*
@@ -144,124 +118,6 @@ MISSING_VALUE = "?"
 log = Log()
 
 class ChaFile:
-
-	def _parseMor(self, morContent, lineNumber):
-		"""Internal use. Parse MOR tier
-
-		Args:
-			morContent (string): Content of the MOR tier
-			lineNumber (int): Line number
-
-		Returns:
-			list: Parsed MOR tier
-		"""
-		morContent = morContent.split(" ")
-
-		arrMorData = []
-
-		for morUnit in morContent:
-			lstMorUnit = []
-
-			if "^" in morUnit:
-				if lineNumber not in self.morAmbiguousLines:
-					self.morAmbiguousLines.append(lineNumber)
-				
-				lstMorUnit = morUnit.split("^")
-				morUnit = lstMorUnit[0]
-				lstMorUnit = lstMorUnit[1:]
-
-			parsedMorUnit = self._parseMorUnit(morUnit)
-			if parsedMorUnit != {}:
-				if len(lstMorUnit) > 0 :
-					parsedMorUnit[MOR_UNIT_AMBIGUOUS] = lstMorUnit
-
-				arrMorData.append( parsedMorUnit )
-
-		return arrMorData
-
-	def _parseMorUnit(self, morUnit):
-		"""Internal use. Parse a MOR unit (one word)
-
-		Args:
-			morUnit (string): One word as described by MOR
-
-		Returns:
-			dict: A dict representation of the MOR unit
-		"""
-		if morUnit in MOR_STOP_WORDS:
-			return {}
-		
-		matches = re.match(MOR_REGEX, morUnit)
-		if matches != None: #no agarra ni . ! ? 
-			if len(matches.groups()) == 3:
-				morCategoria = matches.group(1)
-				morLexema = matches.group(2)
-				morExtra = matches.group(3)
-
-				for stopWord in MOR_STOP_WORDS:
-					if type(stopWord) is list:
-						if morLexema == stopWord[1] and morCategoria == stopWord[0]:
-							if len(stopWord) == 2:
-								return {}
-							else:
-								if stopWord[2] in morExtra:
-									return {}
-					else:
-						if morLexema == stopWord:
-							return {}
-
-				#reemplazo de palabras que está agarrando mal el MOR
-				if morLexema in MOR_REPLACEMENTS:
-					morLexema = MOR_REPLACEMENTS[morLexema]
-
-				parsedMorUnit = {
-					MOR_UNIT_CATEGORIA : morCategoria,
-					MOR_UNIT_LEXEMA : morLexema,
-					MOR_UNIT_EXTRA : morExtra
-				}
-
-				return parsedMorUnit
-			else:
-				log.log(f"Warning: Malformed mor unit \"{morUnit}\"")
-				return {}
-		else:
-			return {}
-
-	def _parsePra(self, praContent, lineNumber):
-		"""Internal use. Parse pragmatic function
-
-		Args:
-			praContent (string): Content of the %pra tier
-			lineNumber (int): Line number
-
-		Returns:
-			string: PRA code
-		"""
-		pra = praContent.strip()[1:].strip()
-		if not pra in TIER_PRAGMATIC_FUNCTION_FUNCTIONS:
-			log.log(f"Warning. Pragmatic function {pra} is invalid. Using {MISSING_VALUE} (line {lineNumber})")
-			return MISSING_VALUE
-
-		return pra
-
-	def _parseDad(self, dadContent, lineNumber):
-		"""Internal use. Parse activity type tier (%dad)
-
-		Args:
-			dadContent (string): Content of the %dad tier
-			lineNumber (int): Line number
-
-		Returns:
-			list: List of activity types as strings
-		"""
-		dads = dadContent.strip()[1:].split(":")
-
-		for dad in dads:
-			if not dad in TIER_ACTIVITY_SCORES:
-				log.log("Warning. Activity %s is invalid. Using IND (line %d)" % (dad, lineNumber))
-				return ["IND"]
-
-		return dads
 
 	def __init__(self, chaFilePath,
 				 ignoreSpeakers = [ SPEAKER_SILENCE ], onlyCDS = False, includeLines = [],
@@ -301,6 +157,109 @@ class ChaFile:
 
 		self.setLanguage(language)
 		self.processLines()
+
+	def processLines(self):
+		"""Internal use. Main function that parses the CHA file
+
+		Raises:
+			FileNotFoundError: The path to the CHA file does not exist
+		"""
+
+		if not os.path.isfile(self.chaFilePath):
+			raise FileNotFoundError()
+
+		with open(self.chaFilePath,"r") as f:
+			txtCHA = f.read()
+
+		prog = re.compile(r"[\*%@]\w*:\t.*?(?=\*\w*:\t|@End|\Z)", re.S)#, re.X)
+		parsedCHA = prog.findall(txtCHA)
+
+		self.lines = []
+		self.speakers = []
+		languages = None
+		lineNumber = 1
+
+		for r in parsedCHA:
+			#is header
+			if r[0] == "@":
+				lineNumber += r.count("\n") + 2 #2= utf8 and begin 
+				headerMatch = re.match(r"@Languages:\s(.*)", r)
+				if headerMatch:
+					languages = headerMatch.group(1)
+				continue
+			
+			prog = re.compile(r"(?P<tier>[\*%][\w-]*):[\s]*(?P<content>.*?)(?=[\*%][\w-]*:[\s]*|@End|\Z)", re.S)
+			
+			line = {
+				LINE_NUMBER : lineNumber
+			}
+			
+			skipLine = False
+
+			#build line
+			for m in prog.finditer(r):
+				tier = m.group("tier")
+				content = m.group("content").replace("\t"," ").replace("\n", "")
+
+				if m.group("tier")[0] == "*": #is speaker
+					speaker = tier[1:]
+					if not speaker in self.ignoreSpeakers:
+						if not speaker in self.speakers:
+							self.speakers.append(speaker)
+
+						line[LINE_SPEAKER] = speaker
+						line[LINE_UTTERANCE] = content
+
+						if BULLET_TAG in content:
+							regexBullet = r"\x15(?P<from>\d*)_(?P<to>\d*)\x15"
+							progBullet = re.compile(regexBullet)#, re.S)
+							parsedBullet = list(progBullet.finditer(content))
+
+							if len(parsedBullet) > 0 :
+								bulletFrom = int(parsedBullet[0].group("from"))
+								bulletTo = int(parsedBullet[-1].group("to"))
+								line[ LINE_BULLET ] = [bulletFrom, bulletTo]
+								line[ LINE_UTTERANCE ] = progBullet.sub("", line[ LINE_UTTERANCE ])
+							else:
+								#esto sucede cuando los bullets son de la forma %snd:"filename"_from_to
+								line[ LINE_UTTERANCE ] = line[ LINE_UTTERANCE ].replace(BULLET_TAG, "").strip()
+					else:
+						skipLine = True
+						break
+				else:
+					tierName = tier[1:]
+					line[tierName] = content
+
+					if tierName == "mor":
+						self.morFound = True
+
+					#no es realmente un tier
+					#esto sucede cuando los bullets son de la forma %snd:"filename"_from_to
+					if tierName == "snd":
+						del line[tierName]
+						lstContent = content.replace(BULLET_TAG, "").split("_")
+						line[ LINE_BULLET ] = [int(lstContent[-2]), int(lstContent[-1])]
+
+					if hasattr(self, f"_parse{tierName.capitalize()}" ):
+						tierProcessFunction = getattr(self, f"_parse{tierName.capitalize()}" )
+						line[tierName] = tierProcessFunction( line[tierName], line[LINE_NUMBER] )
+			
+			
+			if not skipLine:
+				self._setAddressee(line)
+
+				if not (self.onlyCDS and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH]):
+					if not speaker in self.ignoreSpeakers:
+						if len(self.includeLines) == 0 or line[ LINE_NUMBER ] in self.includeLines:
+							self.lines.append(line)
+			
+			lineNumber += r.count("\n")
+
+		#if MOR is found on file all lines should have at least an empty TIER_MOR
+		if self.morFound:
+			for l in self.getLines():
+				if TIER_MOR not in l:
+					l[TIER_MOR] = []
 
 	def getLines(self):
 		"""Get an array of parsed utterances
@@ -408,151 +367,6 @@ class ChaFile:
 			string: Language
 		"""
 		return self.language
-
-	def processLines(self):
-		"""Internal use. Main function that parses the CHA file
-
-		Raises:
-			FileNotFoundError: The path to the CHA file does not exist
-		"""
-
-		if not os.path.isfile(self.chaFilePath):
-			raise FileNotFoundError()
-
-		with open(self.chaFilePath,"r") as f:
-			txtCHA = f.read()
-
-		prog = re.compile(r"[\*%@]\w*:\t.*?(?=\*\w*:\t|@End|\Z)", re.S)#, re.X)
-		parsedCHA = prog.findall(txtCHA)
-
-		self.lines = []
-		self.speakers = []
-		languages = None
-		lineNumber = 1
-
-		for r in parsedCHA:
-			#is header
-			if r[0] == "@":
-				lineNumber += r.count("\n") + 2 #2= utf8 and begin 
-				headerMatch = re.match(r"@Languages:\s(.*)", r)
-				if headerMatch:
-					languages = headerMatch.group(1)
-				continue
-			
-			prog = re.compile(r"(?P<tier>[\*%][\w-]*):[\s]*(?P<content>.*?)(?=[\*%][\w-]*:[\s]*|@End|\Z)", re.S)
-			
-			line = {
-				LINE_NUMBER : lineNumber
-			}
-			
-			skipLine = False
-
-			#build line
-			for m in prog.finditer(r):
-				tier = m.group("tier")
-				content = m.group("content").replace("\t"," ").replace("\n", "")
-
-				if m.group("tier")[0] == "*": #is speaker
-					speaker = tier[1:]
-					if not speaker in self.ignoreSpeakers:
-						if not speaker in self.speakers:
-							self.speakers.append(speaker)
-
-						line[LINE_SPEAKER] = speaker
-						line[LINE_UTTERANCE] = content
-
-						if BULLET_TAG in content:
-							regexBullet = r"\x15(?P<from>\d*)_(?P<to>\d*)\x15"
-							progBullet = re.compile(regexBullet)#, re.S)
-							parsedBullet = list(progBullet.finditer(content))
-
-							if len(parsedBullet) > 0 :
-								bulletFrom = int(parsedBullet[0].group("from"))
-								bulletTo = int(parsedBullet[-1].group("to"))
-								line[ LINE_BULLET ] = [bulletFrom, bulletTo]
-								line[ LINE_UTTERANCE ] = progBullet.sub("", line[ LINE_UTTERANCE ])
-							else:
-								#esto sucede cuando los bullets son de la forma %snd:"filename"_from_to
-								line[ LINE_UTTERANCE ] = line[ LINE_UTTERANCE ].replace(BULLET_TAG, "").strip()
-					else:
-						skipLine = True
-						break
-				else:
-					tierName = tier[1:]
-					line[tierName] = content
-
-					if tierName == "mor":
-						self.morFound = True
-
-					#no es realmente un tier
-					#esto sucede cuando los bullets son de la forma %snd:"filename"_from_to
-					if tierName == "snd":
-						del line[tierName]
-						lstContent = content.replace(BULLET_TAG, "").split("_")
-						line[ LINE_BULLET ] = [int(lstContent[-2]), int(lstContent[-1])]
-
-					if hasattr(self, f"_parse{tierName.capitalize()}" ):
-						tierProcessFunction = getattr(self, f"_parse{tierName.capitalize()}" )
-						line[tierName] = tierProcessFunction( line[tierName], line[LINE_NUMBER] )
-			
-			
-			if not skipLine:
-				self._setAddressee(line)
-
-				if not (self.onlyCDS and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH]):
-					if not speaker in self.ignoreSpeakers:
-						if len(self.includeLines) == 0 or line[ LINE_NUMBER ] in self.includeLines:
-							self.lines.append(line)
-			
-			lineNumber += r.count("\n")
-
-		#if MOR is found on file all lines should have at least an empty TIER_MOR
-		if self.morFound:
-			for l in self.getLines():
-				if TIER_MOR not in l:
-					l[TIER_MOR] = []
-
-	def _setAddressee(self, line):
-		"""Internal use. Set normalized addressee 
-
-		Args:
-			line (dict): Utterance
-		"""
-		addressee = SPEAKER_ADULT
-
-		if not TIER_XDS in line:
-			# This is the way we usually do it. e.g. +CHI
-			for target in [ SPEAKER_TARGET_CHILD, SPEAKER_OTHER_CHILD ]:
-				tag = ADDRESSEE_TAG % target
-				if tag in line[LINE_UTTERANCE]:
-					addressee = target
-					line[LINE_UTTERANCE] = line[LINE_UTTERANCE].replace(tag, "").strip()
-		elif line[TIER_XDS] != MISSING_VALUE:
-			if line[TIER_XDS] in ADDRESSEE_CORRESPOND:
-				addressee = ADDRESSEE_CORRESPOND[ line[TIER_XDS] ]
-			else:
-				log.log(f"Warning unknown addressee '{line[TIER_XDS]}' in line '{line[LINE_NUMBER]}'")
-				addressee = ADDRESSEE_XDS_UNKNOWN
-
-		line[LINE_ADDRESSEE] = addressee
-
-		# This was the way elan2cha worked. Leaving this for compatibility
-		# if ADDRESSEE_ALT_TAG in strLine:
-		# 	for target in [ ADDRESSEE_ALT_TAG_ADULT,
-		# 					ADDRESSEE_ALT_TAG_CHILD,
-		# 					ADDRESSEE_ALT_TAG_OTHER,
-		# 					ADDRESSEE_ALT_TAG_TARGET_CHILD,
-		# 					ADDRESSEE_ALT_TAG_UNKNOWN]:
-		# 		tag = ADDRESSEE_ALT_TAG_TEMPLATE % target
-		# 		if tag in strLine:
-		# 			if not USE_ALT_TARGET_CHILD:
-		# 				addressee = ADDRESSEE_CORRESPOND[target]
-		# 			else:
-		# 				addressee = ADDRESSEE_CORRESPOND_ALT[target]
-		#
-		# 			strLine = strLine.replace(tag, "").strip()
-		#
-		# return addressee, strLine
 
 	def processMorToWords(self,line):
 		utt = line[LINE_UTTERANCE]
@@ -1186,18 +1000,127 @@ class ChaFile:
 				return matchedCriteria
 
 		return []
+	
+	def _parseMor(self, morContent, lineNumber):
+		"""Internal use. Parse MOR tier
 
-	def fixDAD(self):
-		"""Choose only one type of activity per utterance when many were coded
+		Args:
+			morContent (string): Content of the MOR tier
+			lineNumber (int): Line number
+
+		Returns:
+			list: Parsed MOR tier
 		"""
-		for l in self.getLines():
-			if l[TIER_ACTIVITY] == MISSING_VALUE:
-				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
-					log.log("Warning. Empty activity in +CHI line (%d)" % l[LINE_NUMBER])
-				continue
-			maxDAD = l[TIER_ACTIVITY][0]
-			for dad in l[TIER_ACTIVITY]:
-				if TIER_ACTIVITY_SCORES[dad] > TIER_ACTIVITY_SCORES[maxDAD]:
-					maxDAD = dad
+		morContent = morContent.split(" ")
 
-			l[TIER_ACTIVITY] = maxDAD
+		arrMorData = []
+
+		for morUnit in morContent:
+			lstMorUnit = []
+
+			if "^" in morUnit:
+				if lineNumber not in self.morAmbiguousLines:
+					self.morAmbiguousLines.append(lineNumber)
+				
+				lstMorUnit = morUnit.split("^")
+				morUnit = lstMorUnit[0]
+				lstMorUnit = lstMorUnit[1:]
+
+			parsedMorUnit = self._parseMorUnit(morUnit)
+			if parsedMorUnit != {}:
+				if len(lstMorUnit) > 0 :
+					parsedMorUnit[MOR_UNIT_AMBIGUOUS] = lstMorUnit
+
+				arrMorData.append( parsedMorUnit )
+
+		return arrMorData
+
+	def _parseMorUnit(self, morUnit):
+		"""Internal use. Parse a MOR unit (one word)
+
+		Args:
+			morUnit (string): One word as described by MOR
+
+		Returns:
+			dict: A dict representation of the MOR unit
+		"""
+		if morUnit in MOR_STOP_WORDS:
+			return {}
+		
+		matches = re.match(MOR_REGEX, morUnit)
+		if matches != None: #no agarra ni . ! ? 
+			if len(matches.groups()) == 3:
+				morCategoria = matches.group(1)
+				morLexema = matches.group(2)
+				morExtra = matches.group(3)
+
+				for stopWord in MOR_STOP_WORDS:
+					if type(stopWord) is list:
+						if morLexema == stopWord[1] and morCategoria == stopWord[0]:
+							if len(stopWord) == 2:
+								return {}
+							else:
+								if stopWord[2] in morExtra:
+									return {}
+					else:
+						if morLexema == stopWord:
+							return {}
+
+				#reemplazo de palabras que está agarrando mal el MOR
+				if morLexema in MOR_REPLACEMENTS:
+					morLexema = MOR_REPLACEMENTS[morLexema]
+
+				parsedMorUnit = {
+					MOR_UNIT_CATEGORIA : morCategoria,
+					MOR_UNIT_LEXEMA : morLexema,
+					MOR_UNIT_EXTRA : morExtra
+				}
+
+				return parsedMorUnit
+			else:
+				log.log(f"Warning: Malformed mor unit \"{morUnit}\"")
+				return {}
+		else:
+			return {}
+
+	def _setAddressee(self, line):
+		"""Internal use. Set normalized addressee 
+
+		Args:
+			line (dict): Utterance
+		"""
+		addressee = SPEAKER_ADULT
+
+		if not TIER_XDS in line:
+			# This is the way we usually do it. e.g. +CHI
+			for target in [ SPEAKER_TARGET_CHILD, SPEAKER_OTHER_CHILD ]:
+				tag = ADDRESSEE_TAG % target
+				if tag in line[LINE_UTTERANCE]:
+					addressee = target
+					line[LINE_UTTERANCE] = line[LINE_UTTERANCE].replace(tag, "").strip()
+		elif line[TIER_XDS] != MISSING_VALUE:
+			if line[TIER_XDS] in ADDRESSEE_CORRESPOND:
+				addressee = ADDRESSEE_CORRESPOND[ line[TIER_XDS] ]
+			else:
+				log.log(f"Warning unknown addressee '{line[TIER_XDS]}' in line '{line[LINE_NUMBER]}'")
+				addressee = ADDRESSEE_XDS_UNKNOWN
+
+		line[LINE_ADDRESSEE] = addressee
+
+		# This was the way elan2cha worked. Leaving this for compatibility
+		# if ADDRESSEE_ALT_TAG in strLine:
+		# 	for target in [ ADDRESSEE_ALT_TAG_ADULT,
+		# 					ADDRESSEE_ALT_TAG_CHILD,
+		# 					ADDRESSEE_ALT_TAG_OTHER,
+		# 					ADDRESSEE_ALT_TAG_TARGET_CHILD,
+		# 					ADDRESSEE_ALT_TAG_UNKNOWN]:
+		# 		tag = ADDRESSEE_ALT_TAG_TEMPLATE % target
+		# 		if tag in strLine:
+		# 			if not USE_ALT_TARGET_CHILD:
+		# 				addressee = ADDRESSEE_CORRESPOND[target]
+		# 			else:
+		# 				addressee = ADDRESSEE_CORRESPOND_ALT[target]
+		#
+		# 			strLine = strLine.replace(tag, "").strip()
+		#
+		# return addressee, strLine
