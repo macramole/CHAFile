@@ -62,6 +62,7 @@ MOR_UNIT_CATEGORIA_LEXEMA = "categoria|lexema" #solo para la búsqueda
 MOR_UNIT_EXTRA = "extra"
 MOR_UNIT_AMBIGUOUS = "ambiguo"
 MOR_STOP_WORDS = [  ["imp", "da", "-2S&IMP~pro:clit|3S"], #lexema o [categoria, lexema] o [categoria, lexema, extra]
+					["co", "dale"],
 					"okay",
 					# "like",
 					"right"
@@ -383,26 +384,65 @@ class ChaFile:
 		"""
 		utt = line[LINE_UTTERANCE]
 
+		# remove everything if utterance is in a foreign language
+		if re.match(r"^\[\- .*?\]", utt):
+			utt = ""
+
 		# remove [+ TARGET]		
 		utt = re.sub(r"\[\+.*\]", "", utt)
 
-		# deletes all [=! some_comment] and keeps whats inside <>
-		# i.e <you get your dog> [=! imitates] => you get your dog
-		replacingRegEx = r"(?:<(.*)\>|(\S*)) \[=!\s[\s\w]*\]"
-		prog = re.compile(replacingRegEx)
-		for m in prog.finditer(utt):
-			groupNum = 1
-			if m.group(2):
-				groupNum = 2
-			utt = re.sub(replacingRegEx, m.group(groupNum), utt, count=1)
+		# remove words with @ and : (usually for foreign words inside a utt)
+		utt = re.sub(r"[\w'`´]*?@\w*?:\w*", "", utt)
 
 		# deletes all <slang_word> [: some_replacing_word] and keeps some_replacing_word
-		replacingRegEx = r"\<\S*\> \[\:\s([\s\w]*)\]"
+		replacingRegEx = r"(?:\<&?=?[\w\s'@,\-&]*\>|\w*)\s*?\[\: ([\w\s'@,-]*)\]"
 		prog = re.compile(replacingRegEx)
-		for m in prog.finditer(utt):
-			utt = re.sub(replacingRegEx, m.group(1), utt, count=1)
+		while prog.search(utt):
+			m = prog.search(utt)
+
+			replaceBy = ""
+			if m.group(1):
+				replaceBy = m.group(1)
+
+			utt = re.sub(replacingRegEx, replaceBy, utt, count=1)
+
+		# deletes all [=! some_comment] and keeps whats inside <>
+		# i.e <you get your dog> [=! imitates] => you get your dog
+		# replacingRegEx = r"(?:\<([^\<\>]*)\>|(\w+))\s*?\[=!\s[^\<\>]*\]"
+		replacingRegEx = r"(?:\<(&?=?[\w\s'@,\-&\(\)]*)\>|(\S*))\s*?\[=!\s[\s\w]*\]"
+		prog = re.compile(replacingRegEx)
+		while prog.search(utt):
+			m = prog.search(utt)
+			replaceBy = ""
+
+			if m.group(1):
+				replaceBy = m.group(1)
+			elif m.group(2):
+				replaceBy = m.group(2)
+
+			utt = re.sub(replacingRegEx, replaceBy, utt, count=1)
 		
+		# remove []		
+		utt = re.sub(r"\[[^\/]*?\]", "", utt)
+
 		utt = utt.split(" ")
+
+		# Remove words that starts with -
+		utt = list(filter( lambda w: len(w) and w[0] != "-", utt ))
+
+		# Commas are parsed by MOR
+		uttWithCommas = []
+		for w in utt:
+			if "," in w and len(w) > 0:
+				uttWithCommas.append( w[:w.find(",")] )
+				uttWithCommas.append(",")
+				
+				extra = w[(w.find(",")+1):]
+				if len(extra) > 0:
+					uttWithCommas.append(extra)
+			else:
+				uttWithCommas.append(w)
+		utt = uttWithCommas
 
 		# "[/]" means repetition. This and next word won't be parsed by MOR
 		while "[/]" in utt:
@@ -415,28 +455,22 @@ class ChaFile:
 				i = utt.index(stopWord)
 				del utt[i]
 		
-		# Only keep words that start with a letter or a number different to 0
-		utt = list(filter( lambda w: len(w) and (w[0].isalpha() or (w[0].isdigit() and w[0] != "0" )) , utt ))
-
-		# Commas are parsed by MOR
-		uttWithCommas = []
-		for w in utt:
-			if "," in w and len(w) > 0:
-				uttWithCommas.append( w[:w.find(",")] )
-				uttWithCommas.append(",")
-			else:
-				uttWithCommas.append(w)
-		utt = uttWithCommas
-		
 		# "xxx" means transcriptor couldn't understand. This word won't be parsed by MOR
 		while "xxx" in utt:
 			i = utt.index("xxx")
 			del utt[i]
+		
+		while "(.)" in utt:
+			i = utt.index("(.)")
+			del utt[i]
+
+		# Only keep words that start with a letter or a number different to 0
+		utt = list(filter( lambda w: len(w) and (w[0].isalpha() or w[0] in [",","'","("] or (w[0].isdigit() and w[0] != "0" )) , utt ))
 
 		line[LINE_MOR_TO_WORDS] = utt
 
 		if len(line[LINE_MOR_TO_WORDS]) != len(line[TIER_MOR]):
-				print(f"MorToWord failed for line [{line[LINE_NUMBER]}]")
+			print(f"MorToWord failed for line [{line[LINE_NUMBER]}]")
 	def morUnitToWord(self, line, morUnitIndex):
 		"""Returns the word from the utterance related to the MOR unit
 
@@ -507,7 +541,7 @@ class ChaFile:
 			int: Number of words in the utterance
 		"""
 		assert self.morFound, "MOR tier not found"
-		dontCount = ["cm"] #no cuentes la coma
+		dontCount = ["cm", "?"] 
 
 		c = 0
 		for morUnit in line[TIER_MOR]:
@@ -1089,7 +1123,7 @@ class ChaFile:
 		if morUnit in MOR_STOP_WORDS:
 			return {}
 		
-		MOR_REGEX = r"([A-zÀ-ú:#\?]*)\|([A-zÀ-ú]*)(.*)"
+		MOR_REGEX = r"([A-zÀ-ú:#\?']*)\|([A-zÀ-ú]*)(.*)"
 
 		matches = re.match(MOR_REGEX, morUnit)
 		if matches != None: #no agarra ni . ! ? 
