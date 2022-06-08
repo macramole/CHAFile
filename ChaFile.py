@@ -12,6 +12,8 @@ from subprocess import getstatusoutput
 import re
 from log import Log
 
+from lexical_diversity import lex_div as ld
+
 # LINE constants. Use these for getting data from each line
 LINE_UTTERANCE = "emisión"
 LINE_NUMBER = "número"
@@ -49,7 +51,7 @@ COUNT_TYPE_TYPES = "types"
 # Lexical diversity constants.
 LEXICAL_DIVERSITY_TTR = "ttr"
 LEXICAL_DIVERSITY_MATTR = "mattr"
-LEXICAL_DIVERSITY_MASS = "mass_ttr"
+LEXICAL_DIVERSITY_MAAS = "maas_ttr"
 LEXICAL_DIVERSITY_HDD = "hdd" #vocd like, default
 LEXICAL_DIVERSITY_MTLD = "mtld"
 ###############################################
@@ -1055,8 +1057,8 @@ class ChaFile:
 		result = -1
 		if metric == LEXICAL_DIVERSITY_HDD:
 			result = ld.hdd(tokens)
-		elif metric == LEXICAL_DIVERSITY_MASS:
-			result = ld.mass_ttr(tokens)
+		elif metric == LEXICAL_DIVERSITY_MAAS:
+			result = ld.maas_ttr(tokens)
 		elif metric == LEXICAL_DIVERSITY_MTLD:
 			result = ld.mtld(tokens)
 		elif metric == LEXICAL_DIVERSITY_MATTR:
