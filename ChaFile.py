@@ -1062,7 +1062,9 @@ class ChaFile:
 		elif metric == LEXICAL_DIVERSITY_MTLD:
 			result = ld.mtld(tokens)
 		elif metric == LEXICAL_DIVERSITY_MATTR:
-			result = ld.mattr(tokens)
+			if extraParam == None:
+				extraParam = 50 #default window_size 50
+			result = ld.mattr(tokens, extraParam) 
 		elif metric == LEXICAL_DIVERSITY_TTR:
 			result = ld.ttr(tokens)
 		
