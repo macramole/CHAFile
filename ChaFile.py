@@ -46,6 +46,14 @@ COUNT_TYPE_TOKENS = "tokens"
 COUNT_TYPE_TYPES = "types"
 ###############################################
 
+# Lexical diversity constants.
+LEXICAL_DIVERSITY_TTR = "ttr"
+LEXICAL_DIVERSITY_MATTR = "mattr"
+LEXICAL_DIVERSITY_MASS = "mass_ttr"
+LEXICAL_DIVERSITY_HDD = "hdd" #vocd like, default
+LEXICAL_DIVERSITY_MTLD = "mtld"
+###############################################
+
 # Language constants
 LANGUAGE_SPANISH = "spa"
 LANGUAGE_ENGLISH = "eng"
@@ -1018,6 +1026,45 @@ class ChaFile:
 			list: List of indexes of the words matching the criteria
 		"""
 		return self._checkCriteria( line["mor"], criteria, criteriaType )
+
+	def getLexicalDiversity(self, addressee=ADDRESSEE_ALL, metric=LEXICAL_DIVERSITY_HDD, extraParam = None):
+		lines = []
+
+		if addressee == ADDRESSEE_ALL:
+			lines = self.getLines()
+		elif addressee == ADDRESSEE_CHILD_DIRECTED:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
+					lines.append(l)
+		elif addressee == ADDRESSEE_CHILD_PRODUCED:
+			for l in self.getLines():
+				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
+					lines.append(l)
+		elif addressee == ADDRESSEE_OVER_HEARD:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
+					lines.append(l)
+		
+		tokens = []
+		for l in lines:
+			token = ""
+			for morUnit in l[TIER_MOR]:
+				token += morUnit[MOR_UNIT_CATEGORIA] + "|" + morUnit[MOR_UNIT_LEXEMA] + morUnit[MOR_UNIT_EXTRA]
+			tokens.append(token)
+		
+		result = -1
+		if metric == LEXICAL_DIVERSITY_HDD:
+			result = ld.hdd(tokens)
+		elif metric == LEXICAL_DIVERSITY_MASS:
+			result = ld.mass_ttr(tokens)
+		elif metric == LEXICAL_DIVERSITY_MTLD:
+			result = ld.mtld(tokens)
+		elif metric == LEXICAL_DIVERSITY_MATTR:
+			result = ld.mattr(tokens)
+		elif metric == LEXICAL_DIVERSITY_TTR:
+			result = ld.ttr(tokens)
+		
+		return result
 
 	def _checkCriteria(self, mor, criteria, criteriaType):
 		"""Internal use. Checks the MOR tier for the criteria (just once)
