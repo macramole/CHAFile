@@ -926,11 +926,11 @@ class ChaFile:
 
 		return addressees
 	
-	def count(self, what, addressee=ADDRESSEE_ALL, countType=COUNT_TYPE_TOKENS, countCopAux = False, processLightVerbs = True):
-		"""Count tokens or types of nouns, verbs or adjectives
+	def count(self, what=LINE_UTTERANCE, addressee=ADDRESSEE_ALL, countType=COUNT_TYPE_TOKENS, countCopAux = False, processLightVerbs = True):
+		"""Count tokens or types for any word or for nouns, verbs or adjectives
 
 		Args:
-			what ([type]): LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES
+			what ([type]): LINE_VERBS, LINE_NOUNS, LINE_ADJECTIVES or LINE_UTTERANCE for all kinds of lexical categories
 			addressee ([type], optional): ADDRESSEE_ALL, ADDRESSEE_CHILD_DIRECTED, ADDRESSEE_OVER_HEARD or ADDRESSEE_CHILD_PRODUCED. Defaults to ADDRESSEE_ALL.
 			countType ([type], optional): COUNT_TYPE_TOKENS or COUNT_TYPE_TYPES. Defaults to COUNT_TYPE_TOKENS.
 			countCopAux (bool, optional): Should we count cop and aux as verbs ?. Defaults to False.
@@ -940,8 +940,8 @@ class ChaFile:
 			int: count
 		"""
 
-		if what not in [ LINE_VERBS, LINE_NOUNS, LINE_ADJECTIVES ]:
-			raise "'what' argument should be LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES"
+		if what not in [ LINE_VERBS, LINE_NOUNS, LINE_ADJECTIVES, LINE_UTTERANCE ]:
+			raise Exception("'what' argument should be LINE_VERBS, LINE_NOUNS or LINE_ADJECTIVES or LINE_UTTERANCE")
 
 		if what == LINE_VERBS:
 			self.populateVerbs(countCopAux=countCopAux, processLightVerbs=processLightVerbs)
@@ -955,12 +955,20 @@ class ChaFile:
 		def add(l):
 			nonlocal c
 
-			for index in l[what]:
-				v = l[TIER_MOR][index][MOR_UNIT_LEXEMA]
-				if v in c:
-					c[v] += 1
-				else:
-					c[v] = 1
+			if what != LINE_UTTERANCE:
+				for index in l[what]:
+					v = l[TIER_MOR][index][MOR_UNIT_LEXEMA]
+					if v in c:
+						c[v] += 1
+					else:
+						c[v] = 1
+			else:
+				for morUnit in l[TIER_MOR]:
+					v = morUnit[MOR_UNIT_CATEGORIA] + "|" + morUnit[MOR_UNIT_LEXEMA] + morUnit[MOR_UNIT_EXTRA]
+					if v in c:
+						c[v] += 1
+					else:
+						c[v] = 1
 		
 		if addressee == ADDRESSEE_ALL:
 			for l in self.getLines():
@@ -1104,7 +1112,7 @@ class ChaFile:
 				
 				if currentCriteriaType == MOR_UNIT_CATEGORIA_LEXEMA:
 					if not "|" in c:
-						raise "Criteria type is MOR_UNIT_CATEGORIA_LEXEMA but criteria doesn't include | symbol"
+						raise Exception("Criteria type is MOR_UNIT_CATEGORIA_LEXEMA but criteria doesn't include | symbol")
 					
 					arrCriteria = c.split("|")
 
