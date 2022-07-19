@@ -42,6 +42,7 @@ SPEAKER_BOTH = "BOTH" #ADULT + (TARGET || CHILD) This is a problem so we are dis
 ADDRESSEE_CHILD_DIRECTED = "cds"
 ADDRESSEE_CHILD_PRODUCED = "chi"
 ADDRESSEE_OVER_HEARD = "ohs"
+ADDRESSEE_ADULT = "adult"
 ADDRESSEE_ALL = "all"
 
 COUNT_TYPE_TOKENS = "tokens"
@@ -931,7 +932,7 @@ class ChaFile:
 
 		Args:
 			what ([type]): LINE_VERBS, LINE_NOUNS, LINE_ADJECTIVES or LINE_UTTERANCE for all kinds of lexical categories
-			addressee ([type], optional): ADDRESSEE_ALL, ADDRESSEE_CHILD_DIRECTED, ADDRESSEE_OVER_HEARD or ADDRESSEE_CHILD_PRODUCED. Defaults to ADDRESSEE_ALL.
+			addressee ([type], optional): ADDRESSEE_ALL, ADDRESSEE_CHILD_DIRECTED, ADDRESSEE_OVER_HEARD, ADDRESSEE_CHILD_PRODUCED or ADDRESSEE_ADULT. Defaults to ADDRESSEE_ALL.
 			countType ([type], optional): COUNT_TYPE_TOKENS or COUNT_TYPE_TYPES. Defaults to COUNT_TYPE_TOKENS.
 			countCopAux (bool, optional): Should we count cop and aux as verbs ?. Defaults to False.
 			processLightVerbs (bool, optional): Should we process light verbs. Defaults to True.
@@ -984,6 +985,10 @@ class ChaFile:
 		elif addressee == ADDRESSEE_OVER_HEARD:
 			for l in self.getLines():
 				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
+					add( l )
+		elif addressee == ADDRESSEE_ADULT:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] == SPEAKER_ADULT and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
 					add( l )
 		
 		# print(c)
