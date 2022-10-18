@@ -2,6 +2,9 @@ from ChaFile import *
 from glob import glob
 import json
 
+# Modo con intervención y sin intervención para ADS
+# Para CDS dejamos como está
+
 target = SPEAKER_TARGET_CHILD
 
 TURNO_MAX_INTERVENCION_CHILD = 1 # cuantas intervenciones del CHI
