@@ -126,6 +126,7 @@ CATEGORIAS_ADJETIVOS = ["adj"]
 CATEGORIAS_SUSTANTIVOS = ["n", "n:gerund"] #n:gerund was found in english and want to count it as a noun
 
 MISSING_VALUE = "?"
+WORD_XXX = "xxx" #the word wasn't understood by the transcriber
 ###############################################
 
 log = Log()
@@ -468,9 +469,9 @@ class ChaFile:
 				i = utt.index(stopWord)
 				del utt[i]
 		
-		# "xxx" means transcriptor couldn't understand. This word won't be parsed by MOR
-		while "xxx" in utt:
-			i = utt.index("xxx")
+		# WORD_XXX means transcriptor couldn't understand. This word won't be parsed by MOR
+		while WORD_XXX in utt:
+			i = utt.index(WORD_XXX)
 			del utt[i]
 		
 		while "(.)" in utt:
@@ -500,15 +501,21 @@ class ChaFile:
 		return line[LINE_MOR_TO_WORDS][morUnitIndex]
 
 	def countUtterances(self):
-		"""Returns number of utterances
+		"""Returns number of utterances ignoring those with no words in it
 
 		Returns:
 			int: Number of utterances in the current transcript
 		"""
-		return len(self.lines)
+
+		uttCount = 0
+		for l in self.getLines():
+			if not self._isUtteranceEmpty(l):
+				uttCount += 1
+
+		return uttCount
 
 	def countUtterancesByAddressee(self):
-		"""Returns number of utterances grouped by addressee
+		"""Returns number of utterances grouped by addressee ignoring those with no words in it
 
 		Returns:
 			dict: Number of utterances by addressee
@@ -516,6 +523,9 @@ class ChaFile:
 		addressees = {}
 
 		for l in self.getLines():
+			if self._isUtteranceEmpty(l):
+				continue
+
 			addressee = l[LINE_ADDRESSEE]
 			if addressee in addressees:
 				addressees[addressee] += 1
@@ -1268,3 +1278,15 @@ class ChaFile:
 		# 			strLine = strLine.replace(tag, "").strip()
 		#
 		# return addressee, strLine
+	
+	def _isUtteranceEmpty(self, line):
+		if len(line[TIER_MOR]) == 0:
+			allowedWords = [WORD_XXX] + STOP_WORDS
+
+			for w in allowedWords:
+				if w in line[LINE_UTTERANCE]:
+					return False
+			
+			return True
+		
+		return False
