@@ -16,7 +16,8 @@ from lexical_diversity import lex_div as ld
 
 # LINE constants. Use these for getting data from each line
 LINE_UTTERANCE = "emisión"
-LINE_NUMBER = "número"
+LINE_UTTERANCE_NUMBER = "número_de_emisión"
+LINE_NUMBER = "número_de_linea"
 LINE_SPEAKER = "hablante"
 LINE_ADDRESSEE = "destinatario"
 LINE_BULLET = "bullet"
@@ -36,6 +37,7 @@ SPEAKER_PET = "P"
 SPEAKER_OTHER = "OTHER"
 SPEAKER_UNKNOWN = "UNKNOWN"
 SPEAKER_BOTH = "BOTH" #ADULT + (TARGET || CHILD) This is a problem so we are discarding it
+SPEAKER_CODE = "COD"
 ###############################################
 
 # Use these constants for calling count method
@@ -187,22 +189,20 @@ class ChaFile:
 
 		self.lines = []
 		self.speakers = []
-		languages = None
 		lineNumber = 1
+		utteranceNumber = 0
 
 		for r in parsedCHA:
 			#is header
 			if r[0] == "@":
 				lineNumber += r.count("\n") + 2 #2= utf8 and begin 
-				headerMatch = re.match(r"@Languages:\s(.*)", r)
-				if headerMatch:
-					languages = headerMatch.group(1)
 				continue
 			
 			prog = re.compile(r"(?P<tier>[\*%][\w-]*):[\s]*(?P<content>.*?)(?=[\*%][\w-]*:[\s]*|@End|\Z)", re.S)
 			
 			line = {
-				LINE_NUMBER : lineNumber
+				LINE_NUMBER : lineNumber,
+				LINE_UTTERANCE_NUMBER : 0
 			}
 			
 			skipLine = False
@@ -262,6 +262,8 @@ class ChaFile:
 				if not (self.onlyCDS and line[LINE_ADDRESSEE] not in [SPEAKER_TARGET_CHILD, SPEAKER_BOTH]):
 					if not speaker in self.ignoreSpeakers:
 						if len(self.includeLines) == 0 or line[ LINE_NUMBER ] in self.includeLines:
+							utteranceNumber += 1
+							line[LINE_UTTERANCE_NUMBER] = utteranceNumber
 							self.lines.append(line)
 			
 			lineNumber += r.count("\n")
