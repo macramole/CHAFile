@@ -29,7 +29,7 @@ LINE_MOR_TO_WORDS = "mor-to-words"
 #################################
 
 # Speaker constants. line[LINE_SPEAKER] will be one of these
-SPEAKER_SILENCE = "*SIL"
+SPEAKER_SILENCE = "SIL"
 SPEAKER_TARGET_CHILD = "CHI"
 SPEAKER_OTHER_CHILD = "OCH"
 SPEAKER_ADULT = "ADULT"
@@ -500,8 +500,8 @@ class ChaFile:
 		
 		return line[LINE_MOR_TO_WORDS][morUnitIndex]
 
-	def countUtterances(self):
-		"""Returns number of utterances ignoring those with no words in it
+	def countUtterances(self, ignoreEmptyUtterances = True):
+		"""Returns number of utterances ignoring empty ones based on a word criteria
 
 		Returns:
 			int: Number of utterances in the current transcript
@@ -509,13 +509,15 @@ class ChaFile:
 
 		uttCount = 0
 		for l in self.getLines():
-			if not self._isUtteranceEmpty(l):
-				uttCount += 1
+			if ignoreEmptyUtterances and self.isUtteranceEmpty(l):
+				continue
+			
+			uttCount += 1
 
 		return uttCount
 
-	def countUtterancesByAddressee(self):
-		"""Returns number of utterances grouped by addressee ignoring those with no words in it
+	def countUtterancesByAddressee(self, ignoreEmptyUtterances = True):
+		"""Returns number of utterances grouped by addressee ignoring empty ones based on a word criteria
 
 		Returns:
 			dict: Number of utterances by addressee
@@ -523,7 +525,7 @@ class ChaFile:
 		addressees = {}
 
 		for l in self.getLines():
-			if self._isUtteranceEmpty(l):
+			if ignoreEmptyUtterances and self.isUtteranceEmpty(l):
 				continue
 
 			addressee = l[LINE_ADDRESSEE]
@@ -1094,6 +1096,195 @@ class ChaFile:
 			result = ld.ttr(tokens)
 		
 		return result
+	
+	def isUtteranceEmpty(self, line):
+		"""Returns True if the utterance is empty based on a word criteria
+
+		Args:
+			line (dict): A line
+
+		Returns:
+			bool: True if the utterance is considered empty. False otherwise
+		"""
+
+		if len(line[TIER_MOR]) == 0:
+			considerEmptyWords = []
+
+			if self.language == LANGUAGE_SPANISH:
+				considerEmptyWords = [
+					"ríe",
+					"rie",
+					"llora",
+					"besa",
+					"tose",
+					"silba",
+					"silva",
+					"aplaude",
+					"camina",
+					"llorisquea",
+					"chasquea",
+					"sopla",
+					"lloriqueo",
+					"zapatea",
+					"bosteza",
+					"suspira"
+				]
+			elif self.language == LANGUAGE_ENGLISH:
+				considerEmptyWords = [
+					"laughs",
+					"whistles",
+					"cries",
+					"sobs",
+					"giggles",
+					"chuckles",
+					"whines",
+					"yawns",
+					"squeals",
+					"kisses",
+					"toots",
+					"claps",
+					"blowskisses",
+					"wagglestongue",
+					"clickstongue",
+					"clicks",
+					"sighs"
+				]
+
+			for w in considerEmptyWords:
+				if w in line[LINE_UTTERANCE]:
+					return True
+
+			emptyUtt = line[LINE_UTTERANCE].replace("0", "")
+			emptyUtt = emptyUtt.replace(".", "")
+			emptyUtt = emptyUtt.strip()
+			if emptyUtt == "":
+				return True
+
+			return False
+		
+		return False
+	
+	def getTurns( self, addressee, allowIntervining = True ):
+		"""Get utterances grouped by speakers turns
+
+		Args:
+			addressee (str): ADDRESSEE_CHILD_DIRECTED or ADDRESSEE_ADULT
+			allowIntervining (bool, optional): Only for ADDRESSEE_ADULT, allow intervening utterances. Defaults to True.
+
+		Returns:
+			dict: Utterances grouped by speakers turns
+		"""
+
+		TURN_CDS_MAX_INTERVENING_CHILD = 1 # cuantas intervenciones del CHI
+		TURN_CDS_MAX_INTERVENING_OTHER = 3 # cuantas intervenciones de otros hablantes
+		TURN_ADS_MAX_INTERVENING_OTHER = 3 # cuantas intervenciones de otros hablantes
+		TURN_MAX_TIME = 5000 #ms 
+
+		speakers = self.getSpeakers()
+
+		def endTurno():
+			nonlocal turnos, turno, speaker
+			nonlocal qtyIntervencionChild, qtyIntervencionOther
+			
+			turnos[speaker].append(turno)
+			turno = []
+
+			qtyIntervencionChild = 0
+			qtyIntervencionOther = 0
+
+		turnos = {}
+
+		if addressee == ADDRESSEE_CHILD_DIRECTED: ### Turnos dirigidos a target child
+			target = SPEAKER_TARGET_CHILD
+
+			for speaker in speakers:
+				if speaker in [SPEAKER_CODE] :
+					continue
+
+				turnos[speaker] = []
+				turno = []
+
+				qtyIntervencionChild = 0
+				qtyIntervencionOther = 0
+				
+				for l in self.getLines():
+					if self.isUtteranceEmpty(l):
+						continue
+
+					if not turno: # nuevo turno
+						if l[LINE_SPEAKER] == speaker and l[LINE_ADDRESSEE] == target:
+							turno.append(l)
+					else: # turno existente
+						tiempoActual = tiempoAnterior = None
+
+						if LINE_BULLET in l and LINE_BULLET in turno[-1]:
+							tiempoActual = l[LINE_BULLET][0]
+							tiempoAnterior = turno[-1][LINE_BULLET][1]
+						
+						if tiempoActual and (tiempoActual - tiempoAnterior >= TURN_MAX_TIME):
+							endTurno()
+						else:
+							if l[LINE_SPEAKER] == speaker: #el hablante es correcto
+								if l[LINE_ADDRESSEE] == target:
+									turno.append(l)
+								else:
+									endTurno()
+							else: #el hablante cambió
+								if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
+									qtyIntervencionChild += 1
+									if qtyIntervencionChild > TURN_CDS_MAX_INTERVENING_CHILD:
+										endTurno()
+								else:
+									qtyIntervencionOther += 1
+									if qtyIntervencionOther > TURN_CDS_MAX_INTERVENING_OTHER:
+										endTurno()
+		
+		elif addressee == ADDRESSEE_ADULT: ### Turnos entre adultxs
+			target = SPEAKER_ADULT
+
+			for speaker in speakers:
+				if speaker in [SPEAKER_TARGET_CHILD, SPEAKER_OTHER_CHILD, SPEAKER_CODE] :
+					continue
+
+				turnos[speaker] = []
+				turno = []
+
+				qtyIntervencionOther = 0
+				
+				for l in self.getLines():
+					if self.isUtteranceEmpty(l):
+						continue
+
+					if not turno: # nuevo turno
+						if l[LINE_SPEAKER] == speaker and l[LINE_ADDRESSEE] == target:
+							turno.append(l)
+					else: # turno existente
+						tiempoActual = tiempoAnterior = None
+
+						if LINE_BULLET in l and LINE_BULLET in turno[-1]:
+							tiempoActual = l[LINE_BULLET][0]
+							tiempoAnterior = turno[-1][LINE_BULLET][1]
+						
+						if tiempoActual and (tiempoActual - tiempoAnterior >= TURN_MAX_TIME):
+							endTurno()
+						else:
+							if l[LINE_SPEAKER] == speaker: #el hablante es correcto
+								if l[LINE_ADDRESSEE] == target: #si habla con el chico u otro se corta el turno
+									turno.append(l)
+								else:
+									endTurno()
+							else: #el hablante cambió (sea el chico o no)
+								if allowIntervining:
+									qtyIntervencionOther += 1
+									if qtyIntervencionOther > TURN_ADS_MAX_INTERVENING_OTHER:
+										endTurno()
+								else:
+									endTurno()
+		
+		else:
+			raise Exception("'addressee' argument should be ADDRESSEE_CHILD_DIRECTED or ADDRESSEE_ADULT")
+						
+		return turnos
 
 	def _checkCriteria(self, mor, criteria, criteriaType):
 		"""Internal use. Checks the MOR tier for the criteria (just once)
@@ -1278,15 +1469,3 @@ class ChaFile:
 		# 			strLine = strLine.replace(tag, "").strip()
 		#
 		# return addressee, strLine
-	
-	def _isUtteranceEmpty(self, line):
-		if len(line[TIER_MOR]) == 0:
-			allowedWords = [WORD_XXX] + STOP_WORDS
-
-			for w in allowedWords:
-				if w in line[LINE_UTTERANCE]:
-					return False
-			
-			return True
-		
-		return False
