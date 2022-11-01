@@ -1164,7 +1164,7 @@ class ChaFile:
 		
 		return False
 	
-	def getTurns( self, addressee, allowIntervining = True ):
+	def getTurnsBySpeaker( self, addressee, allowIntervining = True ):
 		"""Get utterances grouped by speakers turns
 
 		Args:
@@ -1285,6 +1285,24 @@ class ChaFile:
 			raise Exception("'addressee' argument should be ADDRESSEE_CHILD_DIRECTED or ADDRESSEE_ADULT")
 						
 		return turnos
+	
+	def countTurns( self, addressee, allowIntervining = True ):
+		"""Count turns by addressee
+
+		Args:
+			addressee (str): ADDRESSEE_CHILD_DIRECTED or ADDRESSEE_ADULT
+			allowIntervining (bool, optional): Only for ADDRESSEE_ADULT, allow intervening utterances. Defaults to True.
+
+		Returns:
+			int: Turn count
+		"""
+		turns = self.getTurnsBySpeaker(addressee, allowIntervining)
+		count = 0
+
+		for speaker in turns:
+			count += len(turns[speaker])
+
+		return count
 
 	def _checkCriteria(self, mor, criteria, criteriaType):
 		"""Internal use. Checks the MOR tier for the criteria (just once)
