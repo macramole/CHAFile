@@ -1097,6 +1097,39 @@ class ChaFile:
 		
 		return result
 	
+	def getMLU(self, addressee=ADDRESSEE_ALL):
+		lines = []
+
+		if addressee == ADDRESSEE_ALL:
+			lines = self.getLines()
+		elif addressee == ADDRESSEE_CHILD_DIRECTED:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
+					lines.append(l)
+		elif addressee == ADDRESSEE_CHILD_PRODUCED:
+			for l in self.getLines():
+				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
+					lines.append(l)
+		elif addressee == ADDRESSEE_OVER_HEARD:
+			for l in self.getLines():
+				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
+					lines.append(l)
+		
+		countMorphemes = 0
+		countUtterances = 0
+		for l in lines:
+			if len(l[TIER_MOR]):
+				countUtterances += 1
+				for morUnit in l[TIER_MOR]:
+					countMorphemes += 1
+					for letter in morUnit[MOR_UNIT_EXTRA]:
+						if letter == "&":
+							countMorphemes += 1
+				
+		mlu = countMorphemes / countUtterances
+
+		return (countUtterances, countMorphemes, mlu)
+	
 	def isUtteranceEmpty(self, line):
 		"""Returns True if the utterance is empty based on a word criteria
 
