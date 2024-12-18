@@ -59,6 +59,10 @@ LEXICAL_DIVERSITY_HDD = "hdd" #vocd like, default
 LEXICAL_DIVERSITY_MTLD = "mtld"
 ###############################################
 
+# Linguistic productivity constants.
+LINGUISTIC_PRODUCTIVITY_MLU = "mlu"
+###############################################
+
 # Language constants
 LANGUAGE_SPANISH = "spa"
 LANGUAGE_ENGLISH = "eng"
@@ -275,13 +279,31 @@ class ChaFile:
 				if TIER_MOR not in l:
 					l[TIER_MOR] = []
 
-	def getLines(self):
+	def getLines(self, addressee=ADDRESSEE_ALL):
 		"""Get an array of parsed utterances
 
 		Returns:
 			list: Utterances. Access data using the LINE constants
 		"""
-		return self.lines
+
+		lines = []
+
+		if addressee == ADDRESSEE_ALL:
+			lines = self.lines[:]
+		elif addressee == ADDRESSEE_CHILD_DIRECTED:
+			for l in self.lines:
+				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
+					lines.append(l)
+		elif addressee == ADDRESSEE_CHILD_PRODUCED:
+			for l in self.lines:
+				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
+					lines.append(l)
+		elif addressee == ADDRESSEE_OVER_HEARD:
+			for l in self.lines:
+				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
+					lines.append(l)
+		
+		return lines
 
 	def getLine(self, lineNumber):
 		"""Get a line by its number
@@ -500,7 +522,7 @@ class ChaFile:
 		
 		return line[LINE_MOR_TO_WORDS][morUnitIndex]
 
-	def countUtterances(self, ignoreEmptyUtterances = True):
+	def countUtterances(self, addressee=ADDRESSEE_ALL, ignoreEmptyUtterances = True):
 		"""Returns number of utterances ignoring empty ones based on a word criteria
 
 		Returns:
@@ -508,7 +530,7 @@ class ChaFile:
 		"""
 
 		uttCount = 0
-		for l in self.getLines():
+		for l in self.getLines(addressee):
 			if ignoreEmptyUtterances and self.isUtteranceEmpty(l):
 				continue
 			
@@ -985,28 +1007,10 @@ class ChaFile:
 					else:
 						c[v] = 1
 		
-		if addressee == ADDRESSEE_ALL:
-			for l in self.getLines():
-				add( l )
-		elif addressee == ADDRESSEE_CHILD_DIRECTED:
-			for l in self.getLines():
-				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
-					add( l )
-		elif addressee == ADDRESSEE_CHILD_PRODUCED:
-			for l in self.getLines():
-				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
-					add( l )
-		elif addressee == ADDRESSEE_OVER_HEARD:
-			for l in self.getLines():
-				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
-					add( l )
-		elif addressee == ADDRESSEE_ADULT:
-			for l in self.getLines():
-				if l[LINE_ADDRESSEE] == SPEAKER_ADULT and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
-					add( l )
+		lines = self.getLines(addressee)
+		for l in lines:
+			add( l )
 		
-		# print(c)
-
 		if countType == COUNT_TYPE_TOKENS:
 			return sum(c.values())
 		else:
@@ -1057,22 +1061,17 @@ class ChaFile:
 		return self._checkCriteria( line["mor"], criteria, criteriaType )
 
 	def getLexicalDiversity(self, addressee=ADDRESSEE_ALL, metric=LEXICAL_DIVERSITY_HDD, extraParam = None):
-		lines = []
+		"""Calculate lexical diversity metric
 
-		if addressee == ADDRESSEE_ALL:
-			lines = self.getLines()
-		elif addressee == ADDRESSEE_CHILD_DIRECTED:
-			for l in self.getLines():
-				if l[LINE_ADDRESSEE] == SPEAKER_TARGET_CHILD:
-					lines.append(l)
-		elif addressee == ADDRESSEE_CHILD_PRODUCED:
-			for l in self.getLines():
-				if l[LINE_SPEAKER] == SPEAKER_TARGET_CHILD:
-					lines.append(l)
-		elif addressee == ADDRESSEE_OVER_HEARD:
-			for l in self.getLines():
-				if l[LINE_ADDRESSEE] != SPEAKER_TARGET_CHILD and l[LINE_SPEAKER] != SPEAKER_TARGET_CHILD :
-					lines.append(l)
+		Args:
+			addressee (str, optional): Defaults to ADDRESSEE_ALL.
+			metric (str, optional): LEXICAL_DIVERSITY_HDD, LEXICAL_DIVERSITY_MAAS, LEXICAL_DIVERSITY_MTLD, LEXICAL_DIVERSITY_MATTR, LEXICAL_DIVERSITY_TTR . Defaults to LEXICAL_DIVERSITY_HDD.
+			extraParam (_type_, optional): LEXICAL_DIVERSITY_MATTR has extra param window_size that defaults to 50. Defaults to None.
+
+		Returns:
+			_type_: _description_
+		"""
+		lines = self.getLines(addressee)
 		
 		tokens = []
 		for l in lines:
@@ -1097,6 +1096,27 @@ class ChaFile:
 		
 		return result
 	
+	def getLinguisticProductivity(self, addressee=ADDRESSEE_ALL, metric=LINGUISTIC_PRODUCTIVITY_MLU):
+		"""Calculates MLU metric. Note that results can be very different from CLAN
+
+		Args:
+			addressee (str, optional): Defaults to ADDRESSEE_ALL.
+			metric (str, optional): Defaults to LINGUISTIC_PRODUCTIVITY_MLU.
+
+		Returns:
+			tuple: (utterance count, morpheme count, MLU)
+		"""
+		lines = self.getLines(addressee)
+		count_utts = 0
+		count_mor = 0
+
+		for line in lines:
+			if len(line[TIER_MOR]) > 0: #and not " xxx" in line[LINE_UTTERANCE]
+				count_utts += 1
+				count_mor += len(line[TIER_MOR])
+		
+		return (count_utts, count_mor, count_mor/count_utts)
+		
 	def isUtteranceEmpty(self, line):
 		"""Returns True if the utterance is empty based on a word criteria
 
